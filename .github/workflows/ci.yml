@@ -10,6 +10,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   lint:
     name: Lint
@@ -22,8 +25,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Create UI dist placeholder
+        run: mkdir -p ui/dist && echo '<!doctype html>' > ui/dist/index.html
+
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.1.6
 
@@ -37,6 +43,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Create UI dist placeholder
+        run: mkdir -p ui/dist && echo '<!doctype html>' > ui/dist/index.html
 
       - name: Unit tests
         run: go test -race -count=1 -timeout 120s ./...

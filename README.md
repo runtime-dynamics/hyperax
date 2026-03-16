@@ -66,8 +66,7 @@ Connect Hyperax to Claude Code, Cursor, Copilot, or any MCP-capable client. Your
 
 | Tool | What it covers |
 |------|---------------|
-| `code` | Symbol search, AST-aware code intelligence (Python, Go, Rust, TypeScript, C++, JavaScript) |
-| `search` | Hybrid BM25 + vector search with RRF fusion across code and documentation |
+| `code` | Symbol search, AST-aware code intelligence, hybrid BM25 + vector search (Python, Go, Rust, TypeScript, C++, JavaScript) |
 | `doc` | Documentation search, section retrieval, doc management |
 | `project` | Hierarchical project plans, milestones, tasks, status workflows |
 | `pipeline` | Define and run build/test/lint pipelines with parallel swimlane execution |
