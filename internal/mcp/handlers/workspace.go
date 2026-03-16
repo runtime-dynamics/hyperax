@@ -181,7 +181,7 @@ func (h *WorkspaceHandler) registerWorkspace(ctx context.Context, params json.Ra
 	}
 
 	if h.indexWatcher != nil {
-		h.indexWatcher.AddWorkspace(ctx, args.RootPath)
+		_ = h.indexWatcher.AddWorkspace(ctx, args.RootPath)
 	}
 
 	return types.NewToolResult(ws), nil

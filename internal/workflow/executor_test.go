@@ -164,7 +164,10 @@ func (m *memWorkflowRepo) GetRun(_ context.Context, id string) (*repo.WorkflowRu
 	if !ok {
 		return nil, fmt.Errorf("run %q not found", id)
 	}
-	return run, nil
+	// Return a copy to avoid data races between the executor goroutine
+	// (which mutates the stored struct) and test goroutines reading fields.
+	cp := *run
+	return &cp, nil
 }
 
 func (m *memWorkflowRepo) ListRuns(_ context.Context, workflowID string) ([]*repo.WorkflowRun, error) {
@@ -217,7 +220,10 @@ func (m *memWorkflowRepo) GetRunSteps(_ context.Context, runID string) ([]*repo.
 	var out []*repo.WorkflowRunStep
 	for _, rs := range m.runSteps {
 		if rs.RunID == runID {
-			out = append(out, rs)
+			// Return a copy to avoid data races between the executor goroutine
+			// (which mutates the stored struct) and test goroutines reading fields.
+			cp := *rs
+			out = append(out, &cp)
 		}
 	}
 	return out, nil

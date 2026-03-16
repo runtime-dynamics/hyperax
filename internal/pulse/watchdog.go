@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/hyperax/hyperax/internal/interject"
@@ -40,7 +41,7 @@ type Watchdog struct {
 	logger     *slog.Logger
 	interval   time.Duration
 	threshold  time.Duration
-	triggered  bool
+	triggered  atomic.Bool
 	nowFunc    func() time.Time
 }
 
@@ -95,21 +96,21 @@ func (w *Watchdog) check() {
 	age := now.Sub(last)
 
 	if age > w.threshold {
-		if !w.triggered {
+		if !w.triggered.Load() {
 			w.trigger(age)
 		}
 		return
 	}
 
 	// Heartbeat is fresh. If we were previously triggered, log recovery.
-	if w.triggered {
+	if w.triggered.Load() {
 		w.recover()
 	}
 }
 
 // trigger creates a global SafeMode halt via the interjection manager.
 func (w *Watchdog) trigger(age time.Duration) {
-	w.triggered = true
+	w.triggered.Store(true)
 
 	reason := fmt.Sprintf(
 		"Pulse Engine heartbeat stale for %s (threshold: %s). Fail-closed safety halt engaged.",
@@ -162,7 +163,7 @@ func (w *Watchdog) trigger(age time.Duration) {
 // recover logs that the heartbeat has resumed after a watchdog trigger.
 // The SafeMode halt remains active until manually resolved by a Level 3 holder.
 func (w *Watchdog) recover() {
-	w.triggered = false
+	w.triggered.Store(false)
 
 	w.logger.Info("pulse engine heartbeat recovered — SafeMode still active until resolved")
 

@@ -2,6 +2,7 @@ package pulse
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ func TestWatchdog_TriggerOnStaleHeartbeat(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// Should have triggered.
-	if !wd.triggered {
+	if !wd.triggered.Load() {
 		t.Error("expected watchdog to be triggered")
 	}
 
@@ -98,7 +99,7 @@ func TestWatchdog_NoTriggerOnFreshHeartbeat(t *testing.T) {
 
 	time.Sleep(150 * time.Millisecond)
 
-	if wd.triggered {
+	if wd.triggered.Load() {
 		t.Error("watchdog should NOT be triggered with fresh heartbeat")
 	}
 }
@@ -129,7 +130,7 @@ func TestWatchdog_RecoveryAfterTrigger(t *testing.T) {
 
 	// Wait for trigger.
 	time.Sleep(80 * time.Millisecond)
-	if !wd.triggered {
+	if !wd.triggered.Load() {
 		t.Error("expected watchdog to trigger")
 	}
 
@@ -139,7 +140,7 @@ func TestWatchdog_RecoveryAfterTrigger(t *testing.T) {
 	// Wait for recovery detection.
 	time.Sleep(150 * time.Millisecond)
 
-	if wd.triggered {
+	if wd.triggered.Load() {
 		t.Error("expected watchdog to recover after fresh heartbeat")
 	}
 
@@ -168,7 +169,7 @@ func TestWatchdog_SkipsCheckWhenEngineNotStarted(t *testing.T) {
 
 	time.Sleep(80 * time.Millisecond)
 
-	if wd.triggered {
+	if wd.triggered.Load() {
 		t.Error("watchdog should NOT trigger when engine hasn't started (zero heartbeat)")
 	}
 }
@@ -199,6 +200,7 @@ func TestEngine_LastHeartbeatUpdatedOnTick(t *testing.T) {
 // --- Mock interjection repo for watchdog tests ---
 
 type mockInterjectionRepo struct {
+	mu            sync.Mutex
 	interjections map[string]*types.Interjection
 	clearances    map[string]int
 	bypasses      map[string]*types.SieveBypass
@@ -216,6 +218,8 @@ func newMockInterjectionRepo() *mockInterjectionRepo {
 }
 
 func (m *mockInterjectionRepo) Create(_ context.Context, ij *types.Interjection) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.counter++
 	ij.ID = "ij-" + intToStr(m.counter)
 	ij.Status = "active"
@@ -225,6 +229,8 @@ func (m *mockInterjectionRepo) Create(_ context.Context, ij *types.Interjection)
 }
 
 func (m *mockInterjectionRepo) GetByID(_ context.Context, id string) (*types.Interjection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if ij, ok := m.interjections[id]; ok {
 		return ij, nil
 	}
@@ -232,6 +238,8 @@ func (m *mockInterjectionRepo) GetByID(_ context.Context, id string) (*types.Int
 }
 
 func (m *mockInterjectionRepo) GetActive(_ context.Context, scope string) ([]*types.Interjection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var result []*types.Interjection
 	for _, ij := range m.interjections {
 		if ij.Scope == scope && ij.Status == "active" {
@@ -242,6 +250,8 @@ func (m *mockInterjectionRepo) GetActive(_ context.Context, scope string) ([]*ty
 }
 
 func (m *mockInterjectionRepo) GetAllActive(_ context.Context) ([]*types.Interjection, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var result []*types.Interjection
 	for _, ij := range m.interjections {
 		if ij.Status == "active" {
@@ -256,6 +266,8 @@ func (m *mockInterjectionRepo) GetHistory(_ context.Context, _ string, _ int) ([
 }
 
 func (m *mockInterjectionRepo) Resolve(_ context.Context, id string, action *types.ResolutionAction) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if ij, ok := m.interjections[id]; ok {
 		ij.Status = "resolved"
 		ij.Resolution = action.Resolution
@@ -266,6 +278,8 @@ func (m *mockInterjectionRepo) Resolve(_ context.Context, id string, action *typ
 }
 
 func (m *mockInterjectionRepo) Expire(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if ij, ok := m.interjections[id]; ok {
 		ij.Status = "expired"
 		return nil
@@ -274,6 +288,8 @@ func (m *mockInterjectionRepo) Expire(_ context.Context, id string) error {
 }
 
 func (m *mockInterjectionRepo) GetClearanceLevel(_ context.Context, personaID string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if v, ok := m.clearances[personaID]; ok {
 		return v, nil
 	}
@@ -281,6 +297,8 @@ func (m *mockInterjectionRepo) GetClearanceLevel(_ context.Context, personaID st
 }
 
 func (m *mockInterjectionRepo) CreateBypass(_ context.Context, b *types.SieveBypass) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.counter++
 	b.ID = "bp-" + intToStr(m.counter)
 	m.bypasses[b.ID] = b

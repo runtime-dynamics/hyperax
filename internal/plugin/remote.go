@@ -138,7 +138,7 @@ func FetchRelease(ctx context.Context, src GitHubSource, ghToken string,
 	if err != nil {
 		return nil, fmt.Errorf("plugin.FetchRelease: create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Extract based on file extension.
 	switch {
@@ -287,7 +287,7 @@ func extractTarGz(data []byte, destDir string) error {
 	if err != nil {
 		return fmt.Errorf("plugin.extractTarGz: open gzip: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 
 	tr := tar.NewReader(gz)
 	for {
@@ -330,10 +330,10 @@ func extractTarGz(data []byte, destDir string) error {
 			}
 
 			if _, err := io.Copy(out, tr); err != nil {
-				out.Close()
+				_ = out.Close()
 				return err
 			}
-			out.Close()
+			_ = out.Close()
 		}
 	}
 
@@ -394,19 +394,19 @@ func extractZip(data []byte, destDir string) error {
 		return err
 	}
 	tmpPath := tmpFile.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
+		_ = tmpFile.Close()
 		return err
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	r, err := zip.OpenReader(tmpPath)
 	if err != nil {
 		return fmt.Errorf("plugin.extractZip: open zip: %w", err)
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 
 	for _, f := range r.File {
 		// Prevent path traversal.
@@ -436,18 +436,18 @@ func extractZip(data []byte, destDir string) error {
 
 		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
 		if err != nil {
-			rc.Close()
+			_ = rc.Close()
 			return err
 		}
 
 		if _, err := io.Copy(out, rc); err != nil {
-			out.Close()
-			rc.Close()
+			_ = out.Close()
+			_ = rc.Close()
 			return err
 		}
 
-		out.Close()
-		rc.Close()
+		_ = out.Close()
+		_ = rc.Close()
 	}
 
 	return nil

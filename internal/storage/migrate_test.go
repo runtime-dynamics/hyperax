@@ -18,7 +18,7 @@ func openTestDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("open test db: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 
@@ -82,7 +82,7 @@ func TestMigrator_Version(t *testing.T) {
 		t.Fatalf("expected version 0 before migrations, got %d", v0)
 	}
 
-	m.Up(ctx)
+	_, _ = m.Up(ctx)
 
 	v, err := m.Version(ctx)
 	if err != nil {
@@ -98,7 +98,7 @@ func TestMigrator_History(t *testing.T) {
 	m := NewMigrator(db, testMigrationsFS, "testdata/migrations", "sqlite", nil)
 
 	ctx := context.Background()
-	m.Up(ctx)
+	_, _ = m.Up(ctx)
 
 	history, err := m.History(ctx)
 	if err != nil {
@@ -129,7 +129,7 @@ func TestMigrator_Pending(t *testing.T) {
 		t.Fatalf("expected 2 pending, got %d", len(pending))
 	}
 
-	m.Up(ctx)
+	_, _ = m.Up(ctx)
 
 	pending2, _ := m.Pending(ctx)
 	if len(pending2) != 0 {

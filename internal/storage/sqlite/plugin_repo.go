@@ -91,7 +91,7 @@ func (r *PluginRepo) ListPlugins(ctx context.Context) ([]*types.PluginState, err
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.PluginRepo.ListPlugins: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var plugins []*types.PluginState
 	for rows.Next() {

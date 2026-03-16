@@ -127,7 +127,7 @@ func (c *Client) Send(ctx context.Context, method string, params any) (json.RawM
 	if err != nil {
 		return nil, fmt.Errorf("federation.Client.Send: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 
 	respBody, err := io.ReadAll(io.LimitReader(httpResp.Body, 10*1024*1024)) // 10MB max
 	if err != nil {

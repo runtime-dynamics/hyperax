@@ -117,7 +117,7 @@ func (m *Migrator) History(ctx context.Context) ([]MigrationRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage.Migrator.History: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var records []MigrationRecord
 	for rows.Next() {
@@ -298,7 +298,7 @@ func (m *Migrator) appliedVersions(ctx context.Context) (map[int]bool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage.Migrator.appliedVersions: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	applied := make(map[int]bool)
 	for rows.Next() {

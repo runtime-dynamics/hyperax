@@ -47,7 +47,10 @@ func NewExecutor(repo repo.NervousRepo, bus *EventBus, logger *slog.Logger) *Exe
 // a catch-all filter, and dispatches matching events to handler actions.
 // Blocks until ctx is cancelled.
 func (e *Executor) Start(ctx context.Context) {
-	ctx, e.cancel = context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	e.mu.Lock()
+	e.cancel = cancel
+	e.mu.Unlock()
 
 	if err := e.loadHandlers(ctx); err != nil {
 		e.logger.Error("executor: initial handler load failed", "error", err)
@@ -84,8 +87,12 @@ func (e *Executor) ReloadHandlers() {
 
 // Stop cancels the executor's context, causing Start to return.
 func (e *Executor) Stop() {
-	if e.cancel != nil {
-		e.cancel()
+	e.mu.RLock()
+	cancel := e.cancel
+	e.mu.RUnlock()
+
+	if cancel != nil {
+		cancel()
 	}
 }
 

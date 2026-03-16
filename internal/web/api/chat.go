@@ -243,7 +243,7 @@ func (a *ChatAPI) sendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger async LLM completion — the user sees "delivered" immediately
 	// while the backend calls the LLM provider in the background.
-	go a.generateResponse(env.To, env.From, env.Content, sessionID)
+	go func() { _ = a.generateResponse(env.To, env.From, env.Content, sessionID) }()
 
 	respondJSON(w, r, http.StatusOK, map[string]string{
 		"status": "delivered",
@@ -257,7 +257,7 @@ func (a *ChatAPI) sendMessage(w http.ResponseWriter, r *http.Request) {
 // LLM completion loop, ensuring agent-to-agent messages trigger the recipient's
 // response generation. The completion runs in a separate goroutine.
 func (a *ChatAPI) TriggerCompletion(agentName, senderID, content, sessionID string) {
-	go a.generateResponse(agentName, senderID, content, sessionID)
+	go func() { _ = a.generateResponse(agentName, senderID, content, sessionID) }()
 }
 
 // GenerateResponseSync performs synchronous LLM completion for an agent.
@@ -1064,7 +1064,7 @@ func (a *ChatAPI) tryDelegate(ctx context.Context, candidateName, disabledAgentN
 		"delegate", candidateName, "disabled_agent", disabledAgentName)
 
 	// Trigger the delegate's completion asynchronously.
-	go a.generateResponse(candidateName, senderID, delegationMsg, sessionID)
+	go func() { _ = a.generateResponse(candidateName, senderID, delegationMsg, sessionID) }()
 
 	return true, nil
 }

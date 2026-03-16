@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/hyperax/hyperax/internal/nervous"
@@ -35,6 +36,10 @@ type HeartbeatMonitor struct {
 	heartbeatInterval time.Duration
 	leaseTTL          time.Duration
 	checkInterval     time.Duration
+
+	// mu protects localAgents from concurrent access between the
+	// heartbeat writer goroutine and Register/Deregister callers.
+	mu sync.RWMutex
 
 	// localAgents tracks agent IDs that this process is responsible for
 	// heartbeating. Add agents via Register, remove via Deregister.
@@ -97,12 +102,16 @@ func NewHeartbeatMonitor(
 // Register adds an agent ID to the set of locally managed agents whose
 // heartbeats this monitor will write.
 func (hm *HeartbeatMonitor) Register(agentID string) {
+	hm.mu.Lock()
 	hm.localAgents[agentID] = struct{}{}
+	hm.mu.Unlock()
 }
 
 // Deregister removes an agent ID from the set of locally managed agents.
 func (hm *HeartbeatMonitor) Deregister(agentID string) {
+	hm.mu.Lock()
 	delete(hm.localAgents, agentID)
+	hm.mu.Unlock()
 }
 
 // Start runs both the heartbeat writer and the lease checker loops.
@@ -136,7 +145,14 @@ func (hm *HeartbeatMonitor) Start(ctx context.Context) {
 
 // writeHeartbeats writes a heartbeat for each locally registered agent.
 func (hm *HeartbeatMonitor) writeHeartbeats(ctx context.Context) {
+	hm.mu.RLock()
+	agents := make([]string, 0, len(hm.localAgents))
 	for agentID := range hm.localAgents {
+		agents = append(agents, agentID)
+	}
+	hm.mu.RUnlock()
+
+	for _, agentID := range agents {
 		if err := hm.repo.WriteHeartbeat(ctx, agentID); err != nil {
 			hm.logger.Error("heartbeat write failed",
 				"agent_id", agentID,

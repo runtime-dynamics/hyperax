@@ -704,18 +704,18 @@ func writeFileLines(path string, lines []string) error {
 	w := bufio.NewWriter(f)
 	for _, line := range lines {
 		if _, err := w.WriteString(line + "\n"); err != nil {
-			f.Close()
-			os.Remove(tmp)
+			_ = f.Close()
+			_ = os.Remove(tmp)
 			return fmt.Errorf("write line: %w", err)
 		}
 	}
 	if err := w.Flush(); err != nil {
-		f.Close()
-		os.Remove(tmp)
+		_ = f.Close()
+		_ = os.Remove(tmp)
 		return fmt.Errorf("flush: %w", err)
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return fmt.Errorf("close: %w", err)
 	}
 	return os.Rename(tmp, path)

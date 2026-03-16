@@ -158,8 +158,8 @@ func TestHistory(t *testing.T) {
 	id1, _ := mgr.CreatePending(req1, "guard_a", 10*time.Second)
 	id2, _ := mgr.CreatePending(req2, "guard_b", 10*time.Second)
 
-	mgr.Approve(id1, "admin", "ok")
-	mgr.Reject(id2, "admin", "no")
+	_, _ = mgr.Approve(id1, "admin", "ok")
+	_, _ = mgr.Reject(id2, "admin", "no")
 
 	history := mgr.History(10)
 	if len(history) != 2 {

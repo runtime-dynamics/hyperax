@@ -216,7 +216,7 @@ func (a *EmailAdapter) Receive(ctx context.Context) ([]*types.AgentMail, error) 
 		a.healthy.Store(false)
 		return nil, fmt.Errorf("imap connect: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Login — uses sanitized login to prevent credential leakage in errors (SEC-002).
 	if err := a.imapLogin(conn, username, password); err != nil {
@@ -323,7 +323,7 @@ func (a *EmailAdapter) validateIMAP(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("adapters.EmailAdapter.validateIMAP: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Uses sanitized login to prevent credential leakage in errors (SEC-002).
 	if err := a.imapLogin(conn, username, password); err != nil {
@@ -345,13 +345,13 @@ func (a *EmailAdapter) validateSMTP(_ context.Context) error {
 	if err != nil {
 		return fmt.Errorf("adapters.EmailAdapter.validateSMTP: %w", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	client, err := smtp.NewClient(conn, a.config.SMTPHost)
 	if err != nil {
 		return fmt.Errorf("adapters.EmailAdapter.validateSMTP: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.Hello("hyperax"); err != nil {
 		return fmt.Errorf("adapters.EmailAdapter.validateSMTP: %w", err)
@@ -383,7 +383,7 @@ func (a *EmailAdapter) connectIMAP() (*imapConn, error) {
 
 	// Read server greeting.
 	if _, err := conn.readLine(); err != nil {
-		rawConn.Close()
+		_ = rawConn.Close()
 		return nil, fmt.Errorf("read greeting: %w", err)
 	}
 
@@ -491,11 +491,6 @@ func (c *imapConn) Close() error {
 // This is a var to allow test overrides.
 var smtpSendMail = defaultSMTPSendMail
 
-// setSmtpSendMail overrides the SMTP send function. Used in tests only.
-func setSmtpSendMail(fn func(addr string, auth smtp.Auth, from string, to []string, msg []byte, tlsCfg *tls.Config) error) {
-	smtpSendMail = fn
-}
-
 // defaultSMTPSendMail performs the actual SMTP send with STARTTLS.
 func defaultSMTPSendMail(addr string, auth smtp.Auth, from string, to []string, msg []byte, tlsCfg *tls.Config) error {
 	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
@@ -509,7 +504,7 @@ func defaultSMTPSendMail(addr string, auth smtp.Auth, from string, to []string, 
 		conn.Close()
 		return fmt.Errorf("smtp client: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	if err := client.Hello("hyperax"); err != nil {
 		return fmt.Errorf("ehlo: %w", err)

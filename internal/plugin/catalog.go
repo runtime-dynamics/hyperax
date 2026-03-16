@@ -174,10 +174,10 @@ func compareSemver(a, b string) int {
 	for i := 0; i < 3; i++ {
 		var va, vb int
 		if i < len(pa) {
-			fmt.Sscanf(pa[i], "%d", &va)
+			_, _ = fmt.Sscanf(pa[i], "%d", &va)
 		}
 		if i < len(pb) {
-			fmt.Sscanf(pb[i], "%d", &vb)
+			_, _ = fmt.Sscanf(pb[i], "%d", &vb)
 		}
 		if va < vb {
 			return -1

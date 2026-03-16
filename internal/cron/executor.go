@@ -265,7 +265,7 @@ func (e *Executor) executeWebhook(ctx context.Context, payload json.RawMessage) 
 	if err != nil {
 		return "", fmt.Errorf("cron.Executor.executeWebhook: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
 		return "", fmt.Errorf("cron.Executor.executeWebhook: webhook returned status %d", resp.StatusCode)

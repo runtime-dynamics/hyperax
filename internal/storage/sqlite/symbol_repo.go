@@ -109,7 +109,7 @@ func (r *SymbolRepo) DeleteByWorkspacePath(ctx context.Context, workspaceID, fil
 	if err != nil {
 		return fmt.Errorf("sqlite.SymbolRepo.DeleteByWorkspacePath: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	_, err = tx.ExecContext(ctx,
 		`DELETE FROM symbols WHERE file_id IN (SELECT file_id FROM file_hashes WHERE workspace_id = ? AND file_path = ?)`,
