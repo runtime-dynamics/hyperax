@@ -1,0 +1,128 @@
+version: "1"
+updated_at: "2026-03-10T00:00:00Z"
+plugins:
+  - name: discord
+    display_name: Discord
+    description: Bi-directional Discord communication with gateway events, threads, and rich messaging
+    category: channel
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-discord
+    homepage: https://github.com/runtime-dynamics/hax-plugin-discord
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.0.3"
+    verified: true
+    tags: ["chat", "discord", "messaging", "channel", "gateway"]
+    icon: discord
+
+  - name: slack
+    display_name: Slack
+    description: Bi-directional Slack communication via Web API and Events API with channel monitoring
+    category: channel
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-slack
+    homepage: https://github.com/runtime-dynamics/hax-plugin-slack
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.0.1"
+    verified: true
+    tags: ["chat", "slack", "messaging", "channel"]
+    icon: slack
+
+  - name: vault
+    display_name: HashiCorp Vault
+    description: Secret provider using HashiCorp Vault KV v2 with AppRole and token authentication
+    category: secret_provider
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-vault
+    homepage: https://github.com/runtime-dynamics/hax-plugin-vault
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.0.1"
+    verified: true
+    tags: ["secrets", "vault", "hashicorp", "enterprise", "kv"]
+    icon: vault
+
+  - name: onepassword
+    display_name: 1Password
+    description: Secret provider using 1Password Connect API for team secret management
+    category: secret_provider
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-1password
+    homepage: https://github.com/runtime-dynamics/hax-plugin-1password
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.0.1"
+    verified: true
+    tags: ["secrets", "1password", "enterprise"]
+    icon: onepassword
+
+  - name: email
+    display_name: Email (IMAP/SMTP)
+    description: Email channel integration with IMAP polling and SMTP sending for agent communication
+    category: channel
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-email
+    homepage: https://github.com/runtime-dynamics/hax-plugin-email
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.0.1"
+    verified: true
+    tags: ["email", "imap", "smtp", "channel"]
+    icon: email
+
+  - name: github-tools
+    display_name: GitHub Tools
+    description: Agent-facing tools for GitHub issue tracking, PR management, and repository operations
+    category: tooling
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-github
+    homepage: https://github.com/runtime-dynamics/hax-plugin-github
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.0.1"
+    verified: true
+    tags: ["github", "issues", "pull-requests", "tooling", "vcs"]
+    icon: github
+
+  - name: prometheus-sensor
+    display_name: Prometheus Sensor
+    description: Sensor that polls Prometheus metrics and publishes threshold-based events to the nervous system
+    category: sensor
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-prometheus
+    homepage: https://github.com/runtime-dynamics/hax-plugin-prometheus
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.0.1"
+    verified: true
+    tags: ["monitoring", "prometheus", "metrics", "sensor", "alerting"]
+    icon: prometheus
+
+  - name: approval-gate
+    display_name: Approval Gate
+    description: Configurable tool call approval gate with action-based, tool-based, persona-based, and time-based rules
+    category: guard
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-approval-gate
+    homepage: https://github.com/runtime-dynamics/hax-plugin-approval-gate
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.1.0"
+    verified: true
+    tags: ["guard", "approval", "enterprise", "compliance", "authorization"]
+    icon: shield
+
+  - name: audit-file
+    display_name: Audit File (JSONL)
+    description: File-based audit log writer for CommHub message transitions — writes rotated JSONL files
+    category: audit
+    author: Runtime Dynamics
+    license: Apache-2.0
+    source: github.com/runtime-dynamics/hax-plugin-audit-file
+    homepage: https://github.com/runtime-dynamics/hax-plugin-audit-file
+    min_hyperax_version: "1.0.0"
+    latest_version: "0.1.0"
+    verified: true
+    tags: ["audit", "logging", "compliance", "jsonl", "file"]
+    icon: file-text

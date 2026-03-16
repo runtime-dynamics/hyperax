@@ -1,0 +1,24 @@
+# Dockerfile.goreleaser is used by GoReleaser's docker builds.
+# The binary is pre-built by GoReleaser and copied in — no build stage needed.
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S hyperax \
+    && adduser -S hyperax -G hyperax
+
+COPY hyperax /usr/local/bin/hyperax
+
+RUN mkdir -p /data /config \
+    && chown -R hyperax:hyperax /data /config
+
+USER hyperax
+
+EXPOSE 9090
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:9090/health || exit 1
+
+VOLUME ["/data", "/config"]
+
+ENTRYPOINT ["hyperax"]
+CMD ["serve", "--addr", ":9090"]

@@ -1,0 +1,53 @@
+version: "2"
+sql:
+  # SQLite backend (primary, used in development and single-node deployments).
+  - engine: "sqlite"
+    queries: "queries/"
+    schema: "../internal/storage/sqlite/migrations/"
+    gen:
+      go:
+        package: "sqliteq"
+        out: "../internal/storage/sqlite/sqliteq"
+        emit_json_tags: true
+        emit_empty_slices: true
+        emit_exact_table_names: false
+        overrides:
+          # Map SQLite TEXT timestamps to string (parsed at the repo boundary).
+          - column: "*.created_at"
+            go_type: "string"
+          - column: "*.updated_at"
+            go_type: "string"
+          # SQLite INTEGER booleans.
+          - column: "*.is_active"
+            go_type: "int64"
+          - column: "*.is_default"
+            go_type: "int64"
+          - column: "*.is_enabled"
+            go_type: "int64"
+          - column: "*.critical"
+            go_type: "int64"
+
+  # PostgreSQL backend.
+  - engine: "postgresql"
+    queries: "queries/"
+    schema: "../internal/storage/postgres/migrations/"
+    gen:
+      go:
+        package: "pgq"
+        out: "../internal/storage/postgres/pgq"
+        emit_json_tags: true
+        emit_empty_slices: true
+        emit_exact_table_names: false
+        sql_package: "pgx/v5"
+
+  # MySQL backend.
+  - engine: "mysql"
+    queries: "queries/"
+    schema: "../internal/storage/mysql/migrations/"
+    gen:
+      go:
+        package: "mysqlq"
+        out: "../internal/storage/mysql/mysqlq"
+        emit_json_tags: true
+        emit_empty_slices: true
+        emit_exact_table_names: false

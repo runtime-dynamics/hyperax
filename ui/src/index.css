@@ -1,0 +1,199 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 240 5.9% 10%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* ─── Chat markdown rendering ─────────────────────────────────────────────── */
+.chat-markdown p { margin-bottom: 0.4em; }
+.chat-markdown p:last-child { margin-bottom: 0; }
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3,
+.chat-markdown h4, .chat-markdown h5, .chat-markdown h6 {
+  font-weight: 600;
+  margin-top: 0.75em;
+  margin-bottom: 0.35em;
+}
+.chat-markdown h1 { font-size: 1.1em; }
+.chat-markdown h2 { font-size: 1.05em; }
+.chat-markdown h3 { font-size: 1em; }
+.chat-markdown ul, .chat-markdown ol {
+  padding-left: 1.25em;
+  margin-bottom: 0.4em;
+}
+.chat-markdown ul { list-style-type: disc; }
+.chat-markdown ol { list-style-type: decimal; }
+.chat-markdown li { margin-bottom: 0.2em; }
+.chat-markdown code {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 0.85em;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.12);
+}
+.chat-markdown pre {
+  border-radius: 6px;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  margin-bottom: 0.5em;
+  background: rgb(0 0 0 / 0.15);
+}
+.chat-markdown pre code {
+  background: none;
+  padding: 0;
+}
+.chat-markdown blockquote {
+  border-left: 3px solid currentColor;
+  opacity: 0.8;
+  padding-left: 0.75em;
+  margin-left: 0;
+  margin-bottom: 0.4em;
+}
+.chat-markdown table {
+  border-collapse: collapse;
+  font-size: 0.85em;
+  margin-bottom: 0.5em;
+  width: 100%;
+}
+.chat-markdown th, .chat-markdown td {
+  border: 1px solid rgb(128 128 128 / 0.4);
+  padding: 0.3em 0.6em;
+  text-align: left;
+}
+.chat-markdown th {
+  font-weight: 600;
+  background: rgb(0 0 0 / 0.1);
+}
+.chat-markdown a {
+  text-decoration: underline;
+  opacity: 0.9;
+}
+.chat-markdown hr {
+  border: none;
+  border-top: 1px solid currentColor;
+  opacity: 0.3;
+  margin: 0.5em 0;
+}
+
+/* ── Documentation reader markdown ────────────────────────────────────────── */
+.doc-markdown { line-height: 1.7; }
+.doc-markdown p { margin-bottom: 0.75em; }
+.doc-markdown p:last-child { margin-bottom: 0; }
+.doc-markdown h1, .doc-markdown h2, .doc-markdown h3,
+.doc-markdown h4, .doc-markdown h5, .doc-markdown h6 {
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+}
+.doc-markdown h1 { font-size: 1.5em; border-bottom: 1px solid rgb(128 128 128 / 0.3); padding-bottom: 0.3em; }
+.doc-markdown h2 { font-size: 1.3em; border-bottom: 1px solid rgb(128 128 128 / 0.2); padding-bottom: 0.25em; }
+.doc-markdown h3 { font-size: 1.15em; }
+.doc-markdown h4 { font-size: 1.05em; }
+.doc-markdown ul, .doc-markdown ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+.doc-markdown ul { list-style-type: disc; }
+.doc-markdown ol { list-style-type: decimal; }
+.doc-markdown li { margin-bottom: 0.3em; }
+.doc-markdown li > ul, .doc-markdown li > ol { margin-top: 0.3em; }
+.doc-markdown code {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 0.85em;
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.12);
+}
+.doc-markdown pre {
+  border-radius: 6px;
+  padding: 1em 1.25em;
+  overflow-x: auto;
+  margin-bottom: 0.75em;
+  background: rgb(0 0 0 / 0.15);
+  font-size: 0.9em;
+}
+.doc-markdown pre code { background: none; padding: 0; }
+.doc-markdown blockquote {
+  border-left: 4px solid rgb(128 128 128 / 0.4);
+  padding-left: 1em;
+  margin-left: 0;
+  margin-bottom: 0.75em;
+  opacity: 0.85;
+}
+.doc-markdown table {
+  border-collapse: collapse;
+  font-size: 0.9em;
+  margin-bottom: 0.75em;
+  width: 100%;
+}
+.doc-markdown th, .doc-markdown td {
+  border: 1px solid rgb(128 128 128 / 0.4);
+  padding: 0.4em 0.75em;
+  text-align: left;
+}
+.doc-markdown th {
+  font-weight: 600;
+  background: rgb(0 0 0 / 0.1);
+}
+.doc-markdown a { text-decoration: underline; opacity: 0.9; }
+.doc-markdown img { max-width: 100%; border-radius: 6px; margin: 0.5em 0; }
+.doc-markdown hr {
+  border: none;
+  border-top: 1px solid currentColor;
+  opacity: 0.3;
+  margin: 1em 0;
+}

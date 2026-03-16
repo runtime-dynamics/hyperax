@@ -1,0 +1,167 @@
+version: 2
+
+before:
+  hooks:
+    - cmd: bash -c "cd ui && npm ci && npm run build"
+      output: true
+
+builds:
+  - id: hyperax
+    main: ./cmd/hyperax
+    binary: hyperax
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+  - id: hyperax-no-guard
+    main: ./cmd/hyperax
+    binary: hyperax
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    tags:
+      - noguard
+
+archives:
+  - id: default
+    builds:
+      - hyperax
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+      - docs/*
+  - id: no-guard
+    builds:
+      - hyperax-no-guard
+    format: tar.gz
+    name_template: "{{ .ProjectName }}-no-guard_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE*
+      - docs/*
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Security
+      regexp: '^.*?sec(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+
+release:
+  github:
+    owner: hyperax
+    name: hyperax
+  name_template: "v{{.Version}}"
+  draft: false
+  prerelease: auto
+  header: |
+    ## Hyperax v{{.Version}}
+
+    AI Agent Operating System — multi-agent orchestration with embedded React UI.
+
+    ### Highlights
+    - 205+ MCP tools for agent orchestration
+    - Embedded React dashboard (WebSocket/MCP-first architecture)
+    - SQLite, PostgreSQL, and MySQL storage backends
+    - AgentMail with PGP envelope security and 5 messenger adapters
+    - ABAC-based security with 4-tier clearance model
+  footer: |
+    **Full Changelog**: https://github.com/hyperax/hyperax/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    ---
+    **Docker**: `docker pull ghcr.io/hyperax/hyperax:{{.Version}}`
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+nfpms:
+  - id: hyperax
+    package_name: hyperax
+    vendor: Hyperax
+    homepage: https://github.com/hyperax/hyperax
+    maintainer: Hyperax Team
+    description: AI Agent Operating System
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    contents:
+      - src: ./hyperax.yaml.example
+        dst: /etc/hyperax/hyperax.yaml
+        type: config
+
+dockers:
+  - image_templates:
+      - "ghcr.io/hyperax/hyperax:{{ .Version }}-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    dockerfile: Dockerfile.goreleaser
+    goos: linux
+    goarch: amd64
+  - image_templates:
+      - "ghcr.io/hyperax/hyperax:{{ .Version }}-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    dockerfile: Dockerfile.goreleaser
+    goos: linux
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/hyperax/hyperax:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/hyperax/hyperax:{{ .Version }}-amd64"
+      - "ghcr.io/hyperax/hyperax:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/hyperax/hyperax:latest"
+    image_templates:
+      - "ghcr.io/hyperax/hyperax:{{ .Version }}-amd64"
+      - "ghcr.io/hyperax/hyperax:{{ .Version }}-arm64"
