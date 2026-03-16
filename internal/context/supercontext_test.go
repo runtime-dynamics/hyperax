@@ -169,6 +169,9 @@ func (m *mockProjectRepo) ReconcileCompletionStatus(_ context.Context) (int, int
 func (m *mockProjectRepo) ListTasksByAgent(_ context.Context, _ string, _ string, _ string) ([]*repo.Task, error) {
 	return nil, nil
 }
+func (m *mockProjectRepo) GetNextTask(_ context.Context, _ string) (*repo.Task, error) {
+	return nil, nil
+}
 
 // mockPipelineRepo implements repo.PipelineRepo for testing.
 type mockPipelineRepo struct {

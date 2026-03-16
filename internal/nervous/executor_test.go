@@ -108,7 +108,7 @@ func TestExecutor_DispatchLogAction(t *testing.T) {
 	}
 
 	bus := NewEventBus(64)
-	executor := NewExecutor(mockRepo, bus, nil, discardLogger())
+	executor := NewExecutor(mockRepo, bus, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -151,7 +151,7 @@ func TestExecutor_NoMatchNoAction(t *testing.T) {
 	}
 
 	bus := NewEventBus(64)
-	executor := NewExecutor(mockRepo, bus, nil, discardLogger())
+	executor := NewExecutor(mockRepo, bus, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -185,7 +185,7 @@ func TestExecutor_DisabledHandlerSkipped(t *testing.T) {
 	}
 
 	bus := NewEventBus(64)
-	executor := NewExecutor(mockRepo, bus, nil, discardLogger())
+	executor := NewExecutor(mockRepo, bus, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -210,7 +210,7 @@ func TestExecutor_ReloadHandlers(t *testing.T) {
 	}
 
 	bus := NewEventBus(64)
-	executor := NewExecutor(mockRepo, bus, nil, discardLogger())
+	executor := NewExecutor(mockRepo, bus, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -263,7 +263,7 @@ func TestExecutor_PromoteAction(t *testing.T) {
 	}
 
 	bus := NewEventBus(64)
-	executor := NewExecutor(mockRepo, bus, nil, discardLogger())
+	executor := NewExecutor(mockRepo, bus, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -300,7 +300,7 @@ func TestExecutor_RouteActionNoOp(t *testing.T) {
 	}
 
 	bus := NewEventBus(64)
-	executor := NewExecutor(mockRepo, bus, nil, discardLogger())
+	executor := NewExecutor(mockRepo, bus, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -323,7 +323,7 @@ func TestExecutor_RouteActionNoOp(t *testing.T) {
 func TestExecutor_Stop(t *testing.T) {
 	mockRepo := &mockNervousRepo{handlers: []*types.EventHandler{}}
 	bus := NewEventBus(64)
-	executor := NewExecutor(mockRepo, bus, nil, discardLogger())
+	executor := NewExecutor(mockRepo, bus, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -366,7 +366,7 @@ func TestExecutor_MultipleHandlersMatch(t *testing.T) {
 	}
 
 	bus := NewEventBus(64)
-	executor := NewExecutor(mockRepo, bus, nil, discardLogger())
+	executor := NewExecutor(mockRepo, bus, discardLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

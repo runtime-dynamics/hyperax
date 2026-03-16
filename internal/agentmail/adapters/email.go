@@ -340,7 +340,7 @@ func (a *EmailAdapter) validateIMAP(ctx context.Context) error {
 
 // validateSMTP connects to the SMTP server and issues EHLO to verify connectivity.
 func (a *EmailAdapter) validateSMTP(_ context.Context) error {
-	addr := fmt.Sprintf("%s:%d", a.config.SMTPHost, a.config.SMTPPort)
+	addr := net.JoinHostPort(a.config.SMTPHost, fmt.Sprintf("%d", a.config.SMTPPort))
 	conn, err := net.DialTimeout("tcp", addr, a.config.Timeout)
 	if err != nil {
 		return fmt.Errorf("adapters.EmailAdapter.validateSMTP: %w", err)

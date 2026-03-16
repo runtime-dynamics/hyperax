@@ -240,6 +240,9 @@ func (m *mockOnboardProjectRepo) AddComment(_ context.Context, _ *repo.Comment) 
 func (m *mockOnboardProjectRepo) ListComments(_ context.Context, _, _ string) ([]*repo.Comment, error) {
 	return nil, nil
 }
+func (m *mockOnboardProjectRepo) GetNextTask(_ context.Context, _ string) (*repo.Task, error) {
+	return nil, nil
+}
 
 func TestOnboarder_FullOnboarding(t *testing.T) {
 	bus := nervous.NewEventBus(64)
