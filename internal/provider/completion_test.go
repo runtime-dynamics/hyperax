@@ -442,7 +442,7 @@ func TestChatCompletion_MalformedResponse(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected parse error for malformed response")
 	}
-	if !strings.Contains(err.Error(), "parse response") {
+	if !strings.Contains(err.Error(), "parse native response") && !strings.Contains(err.Error(), "parse OpenAI-format response") {
 		t.Errorf("expected parse error, got: %v", err)
 	}
 }

@@ -11,16 +11,8 @@ func newCommHubRepo(t *testing.T) (*CommHubRepo, context.Context) {
 	t.Helper()
 	db, ctx := setupTestDB(t)
 
-	// Run migration 007 for comm_hub tables.
-	data, err := migrationsFS.ReadFile("migrations/007_commhub.up.sql")
-	if err != nil {
-		t.Fatalf("read migration 007: %v", err)
-	}
-	_, err = db.db.ExecContext(ctx, string(data))
-	if err != nil {
-		t.Fatalf("exec migration 007: %v", err)
-	}
-
+	// setupTestDB runs db.Migrate which applies the consolidated 001_initial
+	// migration containing all tables including commhub.
 	return &CommHubRepo{db: db.db}, ctx
 }
 

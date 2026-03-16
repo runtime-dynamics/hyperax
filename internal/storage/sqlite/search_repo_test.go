@@ -390,29 +390,28 @@ func TestSearchRepo_FTSAvailabilityCaching(t *testing.T) {
 
 // ---------- setupTestDBNoFTS ----------
 
-// setupTestDBNoFTS creates a test database with only migrations 001-003
-// (no FTS5 tables), for testing the LIKE fallback path.
+// setupTestDBNoFTS creates a test database with all migrations applied, then
+// drops the FTS5 tables and their sync triggers to simulate the LIKE fallback path.
 func setupTestDBNoFTS(t *testing.T) (*DB, context.Context) {
 	t.Helper()
-	dir := t.TempDir()
-	dsn := dir + "/test_nofts.db"
+	db, ctx := setupTestDB(t)
 
-	db, err := Open(dsn)
-	if err != nil {
-		t.Fatalf("open: %v", err)
+	// Drop FTS5 sync triggers first (they INSERT into the FTS tables).
+	triggers := []string{
+		"symbols_ai", "symbols_ad", "symbols_au",
+		"doc_chunks_ai", "doc_chunks_ad", "doc_chunks_au",
+		"memories_fts_ai", "memories_fts_ad", "memories_fts_au",
 	}
-	t.Cleanup(func() { _ = db.Close() })
-
-	ctx := context.Background()
-
-	// Run only the core, phase2, cron, and code_content_search migrations (no FTS5).
-	for _, mig := range []string{"migrations/001_core.up.sql", "migrations/002_phase2.up.sql", "migrations/003_cron.up.sql", "migrations/023_code_content_search.up.sql"} {
-		data, err := migrationsFS.ReadFile(mig)
-		if err != nil {
-			t.Fatalf("read %s: %v", mig, err)
+	for _, trig := range triggers {
+		if _, err := db.db.ExecContext(ctx, "DROP TRIGGER IF EXISTS "+trig); err != nil {
+			t.Fatalf("drop trigger %s: %v", trig, err)
 		}
-		if _, err := db.db.ExecContext(ctx, string(data)); err != nil {
-			t.Fatalf("exec %s: %v", mig, err)
+	}
+
+	// Drop FTS5 virtual tables to force LIKE fallback.
+	for _, table := range []string{"symbols_fts", "doc_chunks_fts", "memory_fts"} {
+		if _, err := db.db.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
+			t.Fatalf("drop %s: %v", table, err)
 		}
 	}
 

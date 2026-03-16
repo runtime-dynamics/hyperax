@@ -181,27 +181,14 @@ func TestConfigHandler_RegisterTools(t *testing.T) {
 	registry := mcp.NewToolRegistry()
 	h.RegisterTools(registry)
 
-	expectedTools := []string{
-		"get_config",
-		"set_config",
-		"list_config_keys",
-		"get_config_history",
-	}
-
-	if registry.ToolCount() != len(expectedTools) {
-		t.Errorf("expected %d tools, got %d", len(expectedTools), registry.ToolCount())
+	// Wave XIII consolidation: ConfigHandler registers a single "config" tool.
+	if registry.ToolCount() != 1 {
+		t.Errorf("expected 1 consolidated tool, got %d", registry.ToolCount())
 	}
 
 	schemas := registry.Schemas()
-	registered := make(map[string]bool)
-	for _, s := range schemas {
-		registered[s.Name] = true
-	}
-
-	for _, name := range expectedTools {
-		if !registered[name] {
-			t.Errorf("tool %q not registered", name)
-		}
+	if len(schemas) == 0 || schemas[0].Name != "config" {
+		t.Errorf("expected tool named 'config', got %v", schemas)
 	}
 }
 

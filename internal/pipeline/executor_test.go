@@ -203,6 +203,21 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 }
 
+// readStepOutput resolves a step's OutputLog which may be either inline text
+// or a "file:/path" reference to a log file written by the executor.
+func readStepOutput(t *testing.T, outputLog string) string {
+	t.Helper()
+	if strings.HasPrefix(outputLog, "file:") {
+		path := strings.TrimPrefix(outputLog, "file:")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read step log file %q: %v", path, err)
+		}
+		return string(data)
+	}
+	return outputLog
+}
+
 // --- tests ---
 
 func TestExecute_SuccessfulPipeline(t *testing.T) {
@@ -326,9 +341,9 @@ func TestExecute_CapturesOutput(t *testing.T) {
 		t.Fatalf("expected 1 step, got %d", len(steps))
 	}
 
-	output := strings.TrimSpace(steps[0].OutputLog)
-	if output != "hello world" {
-		t.Errorf("output = %q, want %q", output, "hello world")
+	output := readStepOutput(t, steps[0].OutputLog)
+	if strings.TrimSpace(output) != "hello world" {
+		t.Errorf("output = %q, want %q", strings.TrimSpace(output), "hello world")
 	}
 }
 
@@ -361,9 +376,9 @@ func TestExecute_EnvironmentVariablesApplied(t *testing.T) {
 		t.Fatalf("expected 1 step, got %d", len(steps))
 	}
 
-	output := strings.TrimSpace(steps[0].OutputLog)
-	if output != "test_value_123" {
-		t.Errorf("output = %q, want %q", output, "test_value_123")
+	output := readStepOutput(t, steps[0].OutputLog)
+	if strings.TrimSpace(output) != "test_value_123" {
+		t.Errorf("output = %q, want %q", strings.TrimSpace(output), "test_value_123")
 	}
 }
 
@@ -449,8 +464,9 @@ func TestExecute_SetupCommandsRunBeforeSwimlanes(t *testing.T) {
 	// Verify the check step output contains the marker.
 	for _, s := range steps {
 		if s.StepName == "Check File" {
-			if !strings.Contains(s.OutputLog, "setup_done") {
-				t.Errorf("check step output = %q, expected to contain 'setup_done'", s.OutputLog)
+			output := readStepOutput(t, s.OutputLog)
+			if !strings.Contains(output, "setup_done") {
+				t.Errorf("check step output = %q, expected to contain 'setup_done'", output)
 			}
 		}
 	}

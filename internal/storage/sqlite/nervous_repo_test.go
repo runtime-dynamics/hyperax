@@ -8,23 +8,12 @@ import (
 	"github.com/hyperax/hyperax/pkg/types"
 )
 
-// setupNervousTestDB opens a test DB, runs all standard migrations, then
-// manually applies the 006_nervous migration (which is not yet wired into
-// the main Migrate path). This allows nervous repo tests to run without
-// modifying db.go.
+// setupNervousTestDB opens a test DB and runs all migrations via setupTestDB.
+// The consolidated 001_initial migration includes all tables including
+// domain_events and event_handlers.
 func setupNervousTestDB(t *testing.T) (*NervousRepo, context.Context) {
 	t.Helper()
 	db, ctx := setupTestDB(t)
-
-	// Apply the 006_nervous migration that creates domain_events and event_handlers.
-	data, err := migrationsFS.ReadFile("migrations/006_nervous.up.sql")
-	if err != nil {
-		t.Fatalf("read migration 006: %v", err)
-	}
-	_, err = db.db.ExecContext(ctx, string(data))
-	if err != nil {
-		t.Fatalf("exec migration 006: %v", err)
-	}
 
 	return &NervousRepo{db: db.db}, ctx
 }

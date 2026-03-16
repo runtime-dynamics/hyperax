@@ -287,15 +287,15 @@ func TestNervousHandler_CreateEventHandler(t *testing.T) {
 	h, _, _, _ := setupNervousHandler(t)
 
 	type args struct {
-		Name        string `json:"name"`
-		EventFilter string `json:"event_filter"`
-		Action      string `json:"action"`
+		Name          string `json:"name"`
+		EventFilter   string `json:"event_filter"`
+		HandlerAction string `json:"handler_action"`
 	}
 
 	result := nervousCallTool(t, h.createEventHandler, args{
-		Name:        "log-pipelines",
-		EventFilter: "pipeline.*",
-		Action:      "log",
+		Name:          "log-pipelines",
+		EventFilter:   "pipeline.*",
+		HandlerAction: "log",
 	})
 
 	if result.IsError {
@@ -312,27 +312,27 @@ func TestNervousHandler_CreateEventHandler_MissingFields(t *testing.T) {
 	h, _, _, _ := setupNervousHandler(t)
 
 	type args struct {
-		Name        string `json:"name"`
-		EventFilter string `json:"event_filter"`
-		Action      string `json:"action"`
+		Name          string `json:"name"`
+		EventFilter   string `json:"event_filter"`
+		HandlerAction string `json:"handler_action"`
 	}
 
 	// Missing name
-	result := nervousCallTool(t, h.createEventHandler, args{EventFilter: "*", Action: "log"})
+	result := nervousCallTool(t, h.createEventHandler, args{EventFilter: "*", HandlerAction: "log"})
 	if !result.IsError {
 		t.Error("expected error for missing name")
 	}
 
 	// Missing event_filter
-	result = nervousCallTool(t, h.createEventHandler, args{Name: "test", Action: "log"})
+	result = nervousCallTool(t, h.createEventHandler, args{Name: "test", HandlerAction: "log"})
 	if !result.IsError {
 		t.Error("expected error for missing event_filter")
 	}
 
-	// Missing action
+	// Missing handler_action
 	result = nervousCallTool(t, h.createEventHandler, args{Name: "test", EventFilter: "*"})
 	if !result.IsError {
-		t.Error("expected error for missing action")
+		t.Error("expected error for missing handler_action")
 	}
 }
 
@@ -350,14 +350,14 @@ func TestNervousHandler_ListEventHandlers(t *testing.T) {
 
 	// Create a handler first
 	type createArgs struct {
-		Name        string `json:"name"`
-		EventFilter string `json:"event_filter"`
-		Action      string `json:"action"`
+		Name          string `json:"name"`
+		EventFilter   string `json:"event_filter"`
+		HandlerAction string `json:"handler_action"`
 	}
 	nervousCallTool(t, h.createEventHandler, createArgs{
-		Name:        "test-handler",
-		EventFilter: "pipeline.*",
-		Action:      "log",
+		Name:          "test-handler",
+		EventFilter:   "pipeline.*",
+		HandlerAction: "log",
 	})
 
 	// List again

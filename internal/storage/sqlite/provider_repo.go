@@ -208,6 +208,13 @@ func (r *ProviderRepo) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("provider %q not found", id)
 	}
 
+	// Clear provider_id references in dependent tables (emulates ON DELETE SET NULL).
+	for _, table := range []string{"personas", "agents"} {
+		if _, err := r.db.ExecContext(ctx, "UPDATE "+table+" SET provider_id = '' WHERE provider_id = ?", id); err != nil {
+			return fmt.Errorf("sqlite.ProviderRepo.Delete: clear %s refs: %w", table, err)
+		}
+	}
+
 	return nil
 }
 

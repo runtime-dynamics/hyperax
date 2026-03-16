@@ -87,8 +87,8 @@ func TestSend_SieveRejection(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected sieve rejection error")
 	}
-	if !strings.Contains(err.Error(), "message rejected") {
-		t.Errorf("expected 'message rejected' error, got: %v", err)
+	if !strings.Contains(err.Error(), "blocked by pattern filter") {
+		t.Errorf("expected 'blocked by pattern filter' error, got: %v", err)
 	}
 
 	// Inbox should be empty since message was rejected.
@@ -337,8 +337,8 @@ func TestSend_RecursiveSiftingBlocksInjectionInForwardedMessage(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected recursive sieve to reject prompt injection in forwarded message")
 	}
-	if !strings.Contains(err.Error(), "message rejected") {
-		t.Errorf("expected 'message rejected' error, got: %v", err)
+	if !strings.Contains(err.Error(), "blocked by pattern filter") {
+		t.Errorf("expected 'blocked by pattern filter' error, got: %v", err)
 	}
 }
 

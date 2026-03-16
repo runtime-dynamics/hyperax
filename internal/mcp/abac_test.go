@@ -196,8 +196,8 @@ func TestSetToolABAC(t *testing.T) {
 func TestApplyDefaultABACLevels(t *testing.T) {
 	registry := NewToolRegistry()
 
-	// Register a few tools from the default map.
-	for _, name := range []string{"set_config", "list_workspaces", "install_plugin", "get_secret"} {
+	// Register consolidated tools from the default ABAC map.
+	for _, name := range []string{"config", "workspace", "plugin", "secret"} {
 		registry.Register(name, "test", json.RawMessage(`{}`),
 			func(ctx context.Context, params json.RawMessage) (*types.ToolResult, error) {
 				return nil, nil
@@ -212,10 +212,10 @@ func TestApplyDefaultABACLevels(t *testing.T) {
 		clearance int
 		action    string
 	}{
-		{"set_config", 2, "admin"},
-		{"list_workspaces", 0, "view"},
-		{"install_plugin", 2, "admin"},
-		{"get_secret", 2, "admin"},
+		{"config", 0, "view"},
+		{"workspace", 0, "view"},
+		{"plugin", 0, "view"},
+		{"secret", 2, "admin"},
 	}
 
 	for _, tt := range tests {

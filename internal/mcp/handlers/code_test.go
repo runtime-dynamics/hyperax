@@ -69,13 +69,13 @@ func TestGetFileContent_DefaultLimit500(t *testing.T) {
 	if !strings.Contains(text, "Showing 500 of 800 lines") {
 		t.Error("expected truncation guidance note")
 	}
-	if !strings.Contains(text, "get_file_content(path, offset=501)") {
+	if !strings.Contains(text, "offset=501") {
 		t.Error("expected next-page hint with offset=501")
 	}
-	if !strings.Contains(text, "get_file_content(path, limit=-1)") {
+	if !strings.Contains(text, "limit=-1") {
 		t.Error("expected full-file hint with limit=-1")
 	}
-	if !strings.Contains(text, "get_code_outline(path)") {
+	if !strings.Contains(text, "outline") {
 		t.Error("expected code outline hint")
 	}
 }
