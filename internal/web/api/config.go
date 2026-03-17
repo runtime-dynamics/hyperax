@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -62,8 +63,12 @@ func (a *ConfigAPI) getKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scope := parseScope(r)
-	value, _ := a.repo.GetValue(r.Context(), key, scope)
-	respondJSON(w, r,http.StatusOK, map[string]any{
+	value, err := a.repo.GetValue(r.Context(), key, scope)
+	if err != nil {
+		respondError(w, r, http.StatusInternalServerError, fmt.Sprintf("get config value: %v", err))
+		return
+	}
+	respondJSON(w, r, http.StatusOK, map[string]any{
 		"meta":  meta,
 		"value": value,
 		"scope": scope,

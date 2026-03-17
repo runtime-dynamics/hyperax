@@ -191,7 +191,10 @@ func TestCheckpointRepo_DeleteOlderThan(t *testing.T) {
 	}
 
 	// Only the fresh one should remain.
-	list, _ := r.List(ctx, "agent-1", 10)
+	list, err := r.List(ctx, "agent-1", 10)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
 	if len(list) != 1 {
 		t.Errorf("expected 1 remaining checkpoint, got %d", len(list))
 	}

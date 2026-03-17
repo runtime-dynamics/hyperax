@@ -57,7 +57,10 @@ func TestMigrator_Up_Idempotent(t *testing.T) {
 	m := NewMigrator(db, testMigrationsFS, "testdata/migrations", "sqlite", nil)
 
 	ctx := context.Background()
-	n1, _ := m.Up(ctx)
+	n1, err := m.Up(ctx)
+	if err != nil {
+		t.Fatalf("first up: %v", err)
+	}
 	n2, err := m.Up(ctx)
 	if err != nil {
 		t.Fatalf("second up: %v", err)
@@ -77,7 +80,10 @@ func TestMigrator_Version(t *testing.T) {
 	ctx := context.Background()
 
 	// Before any migrations.
-	v0, _ := m.Version(ctx)
+	v0, err := m.Version(ctx)
+	if err != nil {
+		t.Fatalf("version before migrations: %v", err)
+	}
 	if v0 != 0 {
 		t.Fatalf("expected version 0 before migrations, got %d", v0)
 	}
@@ -131,7 +137,10 @@ func TestMigrator_Pending(t *testing.T) {
 
 	_, _ = m.Up(ctx)
 
-	pending2, _ := m.Pending(ctx)
+	pending2, err := m.Pending(ctx)
+	if err != nil {
+		t.Fatalf("pending after up: %v", err)
+	}
 	if len(pending2) != 0 {
 		t.Fatalf("expected 0 pending after up, got %d", len(pending2))
 	}

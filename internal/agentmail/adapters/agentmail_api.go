@@ -173,7 +173,9 @@ func (a *AgentMailAPIAdapter) Receive(ctx context.Context) ([]*types.AgentMail, 
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		io.Copy(io.Discard, resp.Body) //nolint:errcheck
+		if _, drainErr := io.Copy(io.Discard, resp.Body); drainErr != nil {
+			a.logger.Debug("failed to drain peer error response body", "error", drainErr)
+		}
 		return nil, fmt.Errorf("peer returned status %d", resp.StatusCode)
 	}
 

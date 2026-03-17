@@ -258,6 +258,10 @@ func (t *AckTracker) Stats() json.RawMessage {
 		"ack_count":        len(t.acks),
 		"partition_count":  len(t.locks),
 	}
-	data, _ := json.Marshal(stats)
+	data, err := json.Marshal(stats)
+	if err != nil {
+		t.logger.Error("failed to marshal ack tracker stats", "error", err)
+		return json.RawMessage(`{}`)
+	}
 	return data
 }

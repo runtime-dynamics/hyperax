@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/pkg/types"
@@ -218,8 +217,13 @@ func (r *InterjectionRepo) GetActiveBypass(ctx context.Context, scope string) ([
 			&grantedAt, &expiresAt, &reason, &revoked); err != nil {
 			return nil, fmt.Errorf("sqlite.InterjectionRepo.GetActiveBypass: %w", err)
 		}
-		b.GrantedAt, _ = time.Parse("2006-01-02 15:04:05", grantedAt)
-		b.ExpiresAt, _ = time.Parse("2006-01-02 15:04:05", expiresAt)
+		var parseErr error
+		if b.GrantedAt, parseErr = parseSQLiteTime(grantedAt, "sqlite.InterjectionRepo.GetActiveBypass"); parseErr != nil {
+			return nil, parseErr
+		}
+		if b.ExpiresAt, parseErr = parseSQLiteTime(expiresAt, "sqlite.InterjectionRepo.GetActiveBypass"); parseErr != nil {
+			return nil, parseErr
+		}
 		if reason.Valid {
 			b.Reason = reason.String
 		}
@@ -250,7 +254,10 @@ func (r *InterjectionRepo) ExpireBypasses(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("sqlite.InterjectionRepo.ExpireBypasses: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("sqlite.InterjectionRepo.ExpireBypasses: %w", err)
+	}
 	return int(n), nil
 }
 
@@ -300,13 +307,22 @@ func (r *InterjectionRepo) ListDLQ(ctx context.Context, interjectionID string, l
 			&e.Source, &e.Scope, &queuedAt, &replayedAt, &dismissedAt, &e.Status); err != nil {
 			return nil, fmt.Errorf("sqlite.InterjectionRepo.ListDLQ: %w", err)
 		}
-		e.QueuedAt, _ = time.Parse("2006-01-02 15:04:05", queuedAt)
+		var parseErr error
+		if e.QueuedAt, parseErr = parseSQLiteTime(queuedAt, "sqlite.InterjectionRepo.ListDLQ"); parseErr != nil {
+			return nil, parseErr
+		}
 		if replayedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", replayedAt.String)
+			t, pErr := parseSQLiteTime(replayedAt.String, "sqlite.InterjectionRepo.ListDLQ.replayedAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			e.ReplayedAt = &t
 		}
 		if dismissedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", dismissedAt.String)
+			t, pErr := parseSQLiteTime(dismissedAt.String, "sqlite.InterjectionRepo.ListDLQ.dismissedAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			e.DismissedAt = &t
 		}
 		results = append(results, e)
@@ -406,13 +422,22 @@ func scanInterjectionRow(s interjectionScanner) (*types.Interjection, error) {
 	if traceID.Valid {
 		ij.TraceID = traceID.String
 	}
-	ij.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	var parseErr error
+	if ij.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.scanInterjectionRow"); parseErr != nil {
+		return nil, parseErr
+	}
 	if resolvedAt.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", resolvedAt.String)
+		t, pErr := parseSQLiteTime(resolvedAt.String, "sqlite.scanInterjectionRow.resolvedAt")
+		if pErr != nil {
+			return nil, pErr
+		}
 		ij.ResolvedAt = &t
 	}
 	if expiresAt.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", expiresAt.String)
+		t, pErr := parseSQLiteTime(expiresAt.String, "sqlite.scanInterjectionRow.expiresAt")
+		if pErr != nil {
+			return nil, pErr
+		}
 		ij.ExpiresAt = &t
 	}
 

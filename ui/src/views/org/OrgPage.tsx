@@ -1145,7 +1145,7 @@ export default function OrgPage() {
   const orgProviderList = Array.isArray(providersData) ? providersData : []
 
   // Fetch tasks and inbox sizes for hover cards
-  const { data: allTasks } = useTasks('hyperax')
+  const { data: allTasks } = useTasks('_org')
   const { data: agentInboxes } = useAgentInboxes()
 
   const handleSelect = useCallback((agentId: string) => {

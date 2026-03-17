@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
-	"time"
 
 	"github.com/hyperax/hyperax/internal/repo"
 )
@@ -99,7 +98,10 @@ func (r *ExternalDocRepoSQLite) ListExternalDocSources(ctx context.Context, work
 		if err := rows.Scan(&s.ID, &s.WorkspaceID, &s.Name, &s.Path, &createdAt); err != nil {
 			return nil, fmt.Errorf("sqlite.ExternalDocRepoSQLite.ListExternalDocSources: %w", err)
 		}
-		s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var parseErr error
+		if s.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.ExternalDocRepoSQLite.ListExternalDocSources"); parseErr != nil {
+			return nil, parseErr
+		}
 		sources = append(sources, s)
 	}
 
@@ -126,7 +128,9 @@ func (r *ExternalDocRepoSQLite) GetExternalDocSource(ctx context.Context, id str
 		return nil, fmt.Errorf("sqlite.ExternalDocRepoSQLite.GetExternalDocSource: %w", err)
 	}
 
-	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	if s.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.ExternalDocRepoSQLite.GetExternalDocSource"); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -198,7 +202,10 @@ func (r *ExternalDocRepoSQLite) ListDocTags(ctx context.Context, workspaceID str
 		if err := rows.Scan(&t.ID, &t.WorkspaceID, &t.FilePath, &t.Tag, &t.SourceType, &createdAt); err != nil {
 			return nil, fmt.Errorf("sqlite.ExternalDocRepoSQLite.ListDocTags: %w", err)
 		}
-		t.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var parseErr error
+		if t.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.ExternalDocRepoSQLite.ListDocTags"); parseErr != nil {
+			return nil, parseErr
+		}
 		tags = append(tags, t)
 	}
 
@@ -226,6 +233,8 @@ func (r *ExternalDocRepoSQLite) GetDocTag(ctx context.Context, workspaceID, tag 
 		return nil, fmt.Errorf("sqlite.ExternalDocRepoSQLite.GetDocTag: %w", err)
 	}
 
-	t.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	if t.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.ExternalDocRepoSQLite.GetDocTag"); err != nil {
+		return nil, err
+	}
 	return t, nil
 }

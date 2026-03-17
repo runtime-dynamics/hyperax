@@ -105,7 +105,10 @@ func (r *CheckpointRepo) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.CheckpointRepo.Delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.CheckpointRepo.Delete: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("checkpoint %q not found", id)
 	}
@@ -123,6 +126,9 @@ func (r *CheckpointRepo) DeleteOlderThan(ctx context.Context, agentID string, be
 	if err != nil {
 		return 0, fmt.Errorf("postgres.CheckpointRepo.DeleteOlderThan: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("postgres.CheckpointRepo.DeleteOlderThan: %w", err)
+	}
 	return int(n), nil
 }

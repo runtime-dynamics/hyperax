@@ -311,7 +311,9 @@ func (sp *Subprocess) Stop() error {
 	sp.logger.Info("stopping subprocess")
 
 	// Step 1: close stdin.
-	_ = sp.stdin.Close()
+	if err := sp.stdin.Close(); err != nil {
+		sp.logger.Debug("failed to close stdin", "error", err)
+	}
 
 	// Step 2: wait for voluntary exit.
 	exitCh := make(chan error, 1)

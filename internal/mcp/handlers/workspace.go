@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -168,7 +169,9 @@ func (h *WorkspaceHandler) registerWorkspace(ctx context.Context, params json.Ra
 
 	existing, existErr := h.store.Workspaces.GetWorkspace(ctx, args.Name)
 	if existErr == nil && existing != nil && existing.ID != wsID {
-		_ = h.store.Workspaces.DeleteWorkspace(ctx, args.Name)
+		if err := h.store.Workspaces.DeleteWorkspace(ctx, args.Name); err != nil {
+			return types.NewErrorResult(fmt.Sprintf("delete stale workspace: %v", err)), nil
+		}
 	}
 
 	ws := &types.WorkspaceInfo{
@@ -181,7 +184,9 @@ func (h *WorkspaceHandler) registerWorkspace(ctx context.Context, params json.Ra
 	}
 
 	if h.indexWatcher != nil {
-		_ = h.indexWatcher.AddWorkspace(ctx, args.RootPath)
+		if err := h.indexWatcher.AddWorkspace(ctx, args.RootPath); err != nil {
+			slog.Warn("failed to add workspace to index watcher", "root_path", args.RootPath, "error", err)
+		}
 	}
 
 	return types.NewToolResult(ws), nil

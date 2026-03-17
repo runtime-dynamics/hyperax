@@ -39,9 +39,9 @@ func BuildStructuredSystemPrompt(cfg PromptBuilderConfig) string {
 
 	// <identity> block — always present when an agent name exists.
 	sb.WriteString("<identity>\n")
-	sb.WriteString(fmt.Sprintf("    You are, %s.", cfg.AgentName))
+	fmt.Fprintf(&sb, "    You are, %s.", cfg.AgentName)
 	if cfg.Personality != "" {
-		sb.WriteString(fmt.Sprintf(" Your personality is: %s", cfg.Personality))
+		fmt.Fprintf(&sb, " Your personality is: %s", cfg.Personality)
 	}
 	sb.WriteString("\n</identity>\n")
 
@@ -52,7 +52,7 @@ func BuildStructuredSystemPrompt(cfg PromptBuilderConfig) string {
 	}
 	if roleDesc != "" {
 		sb.WriteString("<role>\n")
-		sb.WriteString(fmt.Sprintf("    %s\n", roleDesc))
+		fmt.Fprintf(&sb, "    %s\n", roleDesc)
 		sb.WriteString("</role>\n")
 	}
 
@@ -63,7 +63,7 @@ func BuildStructuredSystemPrompt(cfg PromptBuilderConfig) string {
 	}
 	if instructions != "" {
 		sb.WriteString("<Instructions>\n")
-		sb.WriteString(fmt.Sprintf("    %s\n", instructions))
+		fmt.Fprintf(&sb, "    %s\n", instructions)
 		sb.WriteString("</Instructions>\n")
 	}
 
@@ -72,13 +72,13 @@ func BuildStructuredSystemPrompt(cfg PromptBuilderConfig) string {
 	if len(rules) > 0 {
 		sb.WriteString("<Engagement Model>\n")
 		for _, r := range rules {
-			sb.WriteString(fmt.Sprintf("    - %s", r.Trigger))
+			fmt.Fprintf(&sb, "    - %s", r.Trigger)
 			if len(r.Chain) > 0 {
 				steps := make([]string, len(r.Chain))
 				for i, step := range r.Chain {
 					steps[i] = fmt.Sprintf("%s (%s)", step.Role, step.Action)
 				}
-				sb.WriteString(fmt.Sprintf(" → %s", strings.Join(steps, " → ")))
+				fmt.Fprintf(&sb, " → %s", strings.Join(steps, " → "))
 			}
 			sb.WriteString("\n")
 		}

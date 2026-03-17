@@ -64,11 +64,15 @@ func (m *ApprovalManager) WaitForApproval(runID, stepID, stepName string) <-chan
 		"run_id", runID, "step_id", stepID, "step_name", stepName)
 
 	// Publish approval pending event.
-	payload, _ := json.Marshal(map[string]string{
+	payload, err := json.Marshal(map[string]string{
 		"run_id":    runID,
 		"step_id":   stepID,
 		"step_name": stepName,
 	})
+	if err != nil {
+		m.logger.Error("failed to marshal approval event payload", "error", err)
+		return w.Ch
+	}
 	m.bus.Publish(types.NervousEvent{
 		Type:      types.EventWorkflowApproval,
 		Scope:     "workflow",

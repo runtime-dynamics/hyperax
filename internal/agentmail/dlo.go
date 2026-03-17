@@ -235,8 +235,12 @@ func (d *DeadLetterOffice) Count() int {
 }
 
 // generateDLOID creates a short random ID for DLO entries.
+// Falls back to a timestamp-based ID if crypto/rand fails.
 func generateDLOID() string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based ID if crypto/rand is unavailable.
+		return fmt.Sprintf("dlo-%d", time.Now().UnixNano())
+	}
 	return "dlo-" + hex.EncodeToString(b)
 }

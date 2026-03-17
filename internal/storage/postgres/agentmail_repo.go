@@ -192,7 +192,10 @@ func (r *AgentMailRepo) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.AgentMailRepo.Delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.AgentMailRepo.Delete: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("mail %q not found", id)
 	}
@@ -366,7 +369,10 @@ func (r *AgentMailRepo) RemoveFromDLO(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.AgentMailRepo.RemoveFromDLO: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.AgentMailRepo.RemoveFromDLO: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("DLO entry %q not found", id)
 	}

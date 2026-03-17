@@ -187,7 +187,9 @@ func (h *WSHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-				_ = conn.Close()
+				if cerr := conn.Close(); cerr != nil {
+					h.logger.Warn("failed to close websocket after replay write failure", "client_id", clientID, "error", cerr)
+				}
 				h.clients.Delete(clientID)
 				h.logger.Warn("websocket replay write failed", "client_id", clientID, "error", err)
 				return
@@ -224,7 +226,9 @@ func (h *WSHub) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			_, msg, err := conn.ReadMessage()
 			if err != nil {
 				h.bus.Unsubscribe(subID)
-				_ = conn.Close()
+				if cerr := conn.Close(); cerr != nil {
+					h.logger.Warn("failed to close websocket on disconnect", "client_id", clientID, "error", cerr)
+				}
 				h.clients.Delete(clientID)
 				h.logger.Info("websocket client disconnected", "client_id", clientID)
 				return

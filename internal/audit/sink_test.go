@@ -132,8 +132,12 @@ func TestJSONLSink_EventFiltering(t *testing.T) {
 	}
 
 	var r0, r1 JSONLRecord
-	_ = json.Unmarshal([]byte(lines[0]), &r0)
-	_ = json.Unmarshal([]byte(lines[1]), &r1)
+	if err := json.Unmarshal([]byte(lines[0]), &r0); err != nil {
+		t.Fatalf("unmarshal line 0: %v", err)
+	}
+	if err := json.Unmarshal([]byte(lines[1]), &r1); err != nil {
+		t.Fatalf("unmarshal line 1: %v", err)
+	}
 
 	if r0.EventType != "interject.created" {
 		t.Errorf("line 0: expected interject.created, got %s", r0.EventType)
@@ -183,7 +187,10 @@ func TestJSONLSink_FileRotation(t *testing.T) {
 	}
 
 	// Check a rotated file exists in the directory.
-	entries, _ := os.ReadDir(dir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read dir: %v", err)
+	}
 	rotatedCount := 0
 	for _, e := range entries {
 		if matched, _ := filepath.Match("audit.jsonl.*.jsonl", e.Name()); matched {

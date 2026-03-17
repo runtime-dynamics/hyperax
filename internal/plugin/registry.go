@@ -124,16 +124,16 @@ func (r *Registry) Get(name string) *PluginRecord {
 
 
 // SetCreatedResources records auto-created resource IDs for a plugin and flushes to disk.
-func (r *Registry) SetCreatedResources(name string, resources []types.CreatedResource) {
+func (r *Registry) SetCreatedResources(name string, resources []types.CreatedResource) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rec, ok := r.records[name]
 	if !ok {
-		return
+		return nil
 	}
 	rec.CreatedResources = resources
 	r.records[name] = rec
-	_ = r.flush()
+	return r.flush()
 }
 
 // GetCreatedResources returns the auto-created resources for a plugin.
@@ -148,16 +148,16 @@ func (r *Registry) GetCreatedResources(name string) []types.CreatedResource {
 }
 
 // ClearCreatedResources removes the created resources list for a plugin and flushes to disk.
-func (r *Registry) ClearCreatedResources(name string) {
+func (r *Registry) ClearCreatedResources(name string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	rec, ok := r.records[name]
 	if !ok {
-		return
+		return nil
 	}
 	rec.CreatedResources = nil
 	r.records[name] = rec
-	_ = r.flush()
+	return r.flush()
 }
 
 // flush writes the current records map to disk as indented JSON.

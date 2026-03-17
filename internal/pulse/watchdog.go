@@ -33,16 +33,17 @@ const (
 // SafeMode halt if the heartbeat becomes stale. This implements the
 // fail-closed safety guarantee: if the Pulse Engine stops ticking for
 // longer than the stale threshold, all agent activity is halted until
-// a Level 3 (ChiefOfStaff) clearance holder resolves the interjection.
+// the engine recovers (auto-healed) or a Level 3 holder manually resolves.
 type Watchdog struct {
-	engine     *Engine
-	ijMgr      *interject.Manager
-	bus        *nervous.EventBus
-	logger     *slog.Logger
-	interval   time.Duration
-	threshold  time.Duration
-	triggered  atomic.Bool
-	nowFunc    func() time.Time
+	engine      *Engine
+	ijMgr       *interject.Manager
+	bus         *nervous.EventBus
+	logger      *slog.Logger
+	interval    time.Duration
+	threshold   time.Duration
+	triggered   atomic.Bool
+	startupHeal atomic.Bool // ensures stale interjections from previous runs are healed once
+	nowFunc     func() time.Time
 }
 
 // NewWatchdog creates a fail-closed watchdog that monitors the Pulse Engine
@@ -102,20 +103,25 @@ func (w *Watchdog) check() {
 		return
 	}
 
-	// Heartbeat is fresh. If we were previously triggered, log recovery.
+	// Heartbeat is fresh. Auto-resolve any active watchdog interjections.
 	if w.triggered.Load() {
 		w.recover()
+		return
+	}
+
+	// On first fresh heartbeat after startup, heal any stale watchdog
+	// interjections left over from a previous run. This runs once.
+	if !w.startupHeal.Load() {
+		w.startupHeal.Store(true)
+		w.healStaleInterjections()
 	}
 }
 
 // trigger creates a global SafeMode halt via the interjection manager.
+// It deduplicates against existing active watchdog interjections to prevent
+// repeated engine crash/restart cycles from flooding the interjection list.
 func (w *Watchdog) trigger(age time.Duration) {
 	w.triggered.Store(true)
-
-	reason := fmt.Sprintf(
-		"Pulse Engine heartbeat stale for %s (threshold: %s). Fail-closed safety halt engaged.",
-		age.Round(time.Second), w.threshold,
-	)
 
 	w.logger.Error("pulse engine heartbeat stale — triggering global halt",
 		"age", age.Round(time.Second),
@@ -124,17 +130,21 @@ func (w *Watchdog) trigger(age time.Duration) {
 
 	// Publish watchdog event on the nervous system.
 	if w.bus != nil {
-		payload, _ := json.Marshal(map[string]any{
+		payload, err := json.Marshal(map[string]any{
 			"age_seconds":       age.Seconds(),
 			"threshold_seconds": w.threshold.Seconds(),
 		})
-		w.bus.Publish(types.NervousEvent{
-			Type:      types.EventWatchdogTriggered,
-			Scope:     string(types.ScopeGlobal),
-			Source:    watchdogSourceType,
-			Payload:   payload,
-			Timestamp: w.nowFunc(),
-		})
+		if err != nil {
+			w.logger.Error("watchdog: failed to marshal event payload", "error", err)
+		} else {
+			w.bus.Publish(types.NervousEvent{
+				Type:      types.EventWatchdogTriggered,
+				Scope:     string(types.ScopeGlobal),
+				Source:    watchdogSourceType,
+				Payload:   payload,
+				Timestamp: w.nowFunc(),
+			})
+		}
 	}
 
 	// Create a global halt interjection. The high source clearance (Level 3)
@@ -142,6 +152,25 @@ func (w *Watchdog) trigger(age time.Duration) {
 	if w.ijMgr != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+
+		// Deduplicate: skip if an active watchdog interjection already exists.
+		active, err := w.ijMgr.GetActive(ctx, string(types.ScopeGlobal))
+		if err == nil {
+			for _, existing := range active {
+				if existing.Source == watchdogSourceType && existing.Severity == string(types.SeverityFatal) {
+					w.logger.Warn("watchdog halt already active, skipping duplicate",
+						"existing_interjection_id", existing.ID,
+						"age", age.Round(time.Second),
+					)
+					return
+				}
+			}
+		}
+
+		reason := fmt.Sprintf(
+			"Pulse Engine heartbeat stale for %s (threshold: %s). Fail-closed safety halt engaged.",
+			age.Round(time.Second), w.threshold,
+		)
 
 		ij := &types.Interjection{
 			Scope:           string(types.ScopeGlobal),
@@ -160,12 +189,46 @@ func (w *Watchdog) trigger(age time.Duration) {
 	}
 }
 
-// recover logs that the heartbeat has resumed after a watchdog trigger.
-// The SafeMode halt remains active until manually resolved by a Level 3 holder.
+// recover auto-resolves any active watchdog interjections when the Pulse
+// Engine heartbeat is healthy again. The watchdog owns the full lifecycle
+// of its interjections: it creates them on stale heartbeat and heals them
+// on recovery. This prevents stale watchdog halts from blocking the platform
+// indefinitely after engine restarts.
 func (w *Watchdog) recover() {
-	w.triggered.Store(false)
+	if w.ijMgr != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	w.logger.Info("pulse engine heartbeat recovered — SafeMode still active until resolved")
+		active, err := w.ijMgr.GetActive(ctx, string(types.ScopeGlobal))
+		if err != nil {
+			w.logger.Error("watchdog recovery: failed to query active interjections", "error", err)
+			return
+		}
+
+		for _, existing := range active {
+			if existing.Source != watchdogSourceType {
+				continue
+			}
+			resolveErr := w.ijMgr.Resolve(ctx, &types.ResolutionAction{
+				InterjectionID: existing.ID,
+				ResolvedBy:     "watchdog",
+				Resolution:     "Pulse Engine heartbeat recovered — auto-resolved by watchdog.",
+				Action:         "resume",
+			})
+			if resolveErr != nil {
+				w.logger.Error("watchdog recovery: failed to auto-resolve interjection",
+					"interjection_id", existing.ID,
+					"error", resolveErr,
+				)
+				continue
+			}
+			w.logger.Info("watchdog auto-resolved stale interjection",
+				"interjection_id", existing.ID,
+			)
+		}
+	}
+
+	w.triggered.Store(false)
 
 	if w.bus != nil {
 		w.bus.Publish(types.NervousEvent{
@@ -174,5 +237,52 @@ func (w *Watchdog) recover() {
 			Source:    watchdogSourceType,
 			Timestamp: w.nowFunc(),
 		})
+	}
+}
+
+// healStaleInterjections resolves watchdog interjections left over from a
+// previous app run. Called once on the first fresh heartbeat after startup.
+// This handles the case where RecoverOnStartup re-engaged safe mode for
+// old watchdog halts but the engine is now healthy.
+func (w *Watchdog) healStaleInterjections() {
+	if w.ijMgr == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	active, err := w.ijMgr.GetActive(ctx, string(types.ScopeGlobal))
+	if err != nil {
+		w.logger.Error("watchdog startup heal: failed to query active interjections", "error", err)
+		return
+	}
+
+	healed := 0
+	for _, existing := range active {
+		if existing.Source != watchdogSourceType {
+			continue
+		}
+		resolveErr := w.ijMgr.Resolve(ctx, &types.ResolutionAction{
+			InterjectionID: existing.ID,
+			ResolvedBy:     "watchdog",
+			Resolution:     "Pulse Engine healthy on startup — auto-healed by watchdog.",
+			Action:         "resume",
+		})
+		if resolveErr != nil {
+			w.logger.Error("watchdog startup heal: failed to resolve stale interjection",
+				"interjection_id", existing.ID,
+				"error", resolveErr,
+			)
+			continue
+		}
+		healed++
+		w.logger.Info("watchdog healed stale interjection from previous run",
+			"interjection_id", existing.ID,
+		)
+	}
+
+	if healed > 0 {
+		w.logger.Info("watchdog startup heal complete", "healed_count", healed)
 	}
 }

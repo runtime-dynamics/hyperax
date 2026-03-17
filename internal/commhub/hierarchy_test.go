@@ -230,11 +230,13 @@ func TestHierarchy_ValidateRoute_WithExplicitPermission(t *testing.T) {
 	ctx := context.Background()
 
 	// Grant explicit permission.
-	_ = repo.GrantPermission(ctx, &types.CommPermission{
+	if err := repo.GrantPermission(ctx, &types.CommPermission{
 		AgentID:    "agent-a",
 		TargetID:   "agent-b",
 		Permission: "both",
-	})
+	}); err != nil {
+		t.Fatalf("grant permission: %v", err)
+	}
 
 	if err := hm.ValidateRoute(ctx, "agent-a", "agent-b"); err != nil {
 		t.Errorf("expected route to be permitted with explicit permission, got: %v", err)
@@ -246,11 +248,13 @@ func TestHierarchy_ValidateRoute_WithWildcardPermission(t *testing.T) {
 	ctx := context.Background()
 
 	// Grant wildcard permission.
-	_ = repo.GrantPermission(ctx, &types.CommPermission{
+	if err := repo.GrantPermission(ctx, &types.CommPermission{
 		AgentID:    "agent-admin",
 		TargetID:   "*",
 		Permission: "send",
-	})
+	}); err != nil {
+		t.Fatalf("grant permission: %v", err)
+	}
 
 	if err := hm.ValidateRoute(ctx, "agent-admin", "agent-anyone"); err != nil {
 		t.Errorf("expected route to be permitted with wildcard, got: %v", err)
@@ -262,11 +266,13 @@ func TestHierarchy_ValidateRoute_ParentToChild(t *testing.T) {
 	ctx := context.Background()
 
 	// Set hierarchy: supervisor -> worker.
-	_ = hm.SetRelationship(ctx, &types.AgentRelationship{
+	if err := hm.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent:  "supervisor",
 		ChildAgent:   "worker",
 		Relationship: "supervisor",
-	})
+	}); err != nil {
+		t.Fatalf("set relationship: %v", err)
+	}
 
 	if err := hm.ValidateRoute(ctx, "supervisor", "worker"); err != nil {
 		t.Errorf("expected parent -> child route to be permitted, got: %v", err)
@@ -278,11 +284,13 @@ func TestHierarchy_ValidateRoute_ChildToParent(t *testing.T) {
 	ctx := context.Background()
 
 	// Set hierarchy: supervisor -> worker.
-	_ = hm.SetRelationship(ctx, &types.AgentRelationship{
+	if err := hm.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent:  "supervisor",
 		ChildAgent:   "worker",
 		Relationship: "supervisor",
-	})
+	}); err != nil {
+		t.Fatalf("set relationship: %v", err)
+	}
 
 	if err := hm.ValidateRoute(ctx, "worker", "supervisor"); err != nil {
 		t.Errorf("expected child -> parent route to be permitted, got: %v", err)
@@ -294,16 +302,20 @@ func TestHierarchy_ValidateRoute_PeersThroughSharedParent(t *testing.T) {
 	ctx := context.Background()
 
 	// Set hierarchy: boss -> worker-a, boss -> worker-b.
-	_ = hm.SetRelationship(ctx, &types.AgentRelationship{
+	if err := hm.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent:  "boss",
 		ChildAgent:   "worker-a",
 		Relationship: "supervisor",
-	})
-	_ = hm.SetRelationship(ctx, &types.AgentRelationship{
+	}); err != nil {
+		t.Fatalf("set relationship worker-a: %v", err)
+	}
+	if err := hm.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent:  "boss",
 		ChildAgent:   "worker-b",
 		Relationship: "supervisor",
-	})
+	}); err != nil {
+		t.Fatalf("set relationship worker-b: %v", err)
+	}
 
 	if err := hm.ValidateRoute(ctx, "worker-a", "worker-b"); err != nil {
 		t.Errorf("expected peer route to be permitted, got: %v", err)
@@ -331,7 +343,10 @@ func TestHierarchy_ValidateRoute_DeniedPublishesBounceEvent(t *testing.T) {
 	defer bus.Unsubscribe("bounce-watcher")
 
 	ctx := context.Background()
-	_ = hm.ValidateRoute(ctx, "no-access", "restricted")
+	// Intentionally ignore error - we are testing the bounce event side effect.
+	if err := hm.ValidateRoute(ctx, "no-access", "restricted"); err == nil {
+		t.Error("expected route validation to fail for unrelated agents")
+	}
 
 	select {
 	case event := <-sub.Ch:
@@ -364,11 +379,13 @@ func TestHierarchy_SetRelationship_PublishesEvent(t *testing.T) {
 	defer bus.Unsubscribe("hierarchy-watcher")
 
 	ctx := context.Background()
-	_ = hm.SetRelationship(ctx, &types.AgentRelationship{
+	if err := hm.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent:  "lead",
 		ChildAgent:   "agent-1",
 		Relationship: "supervisor",
-	})
+	}); err != nil {
+		t.Fatalf("set relationship: %v", err)
+	}
 
 	select {
 	case event := <-sub.Ch:
@@ -385,11 +402,13 @@ func TestHierarchy_GetDelegateFor_DirectChild(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up: parent has a child with "coding" relationship type.
-	_ = hm.SetRelationship(ctx, &types.AgentRelationship{
+	if err := hm.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent:  "team-lead",
 		ChildAgent:   "code-agent",
 		Relationship: "coding",
-	})
+	}); err != nil {
+		t.Fatalf("set relationship: %v", err)
+	}
 
 	delegate, err := hm.GetDelegateFor(ctx, "team-lead", "coding")
 	if err != nil {
@@ -414,12 +433,16 @@ func TestHierarchy_GetFullHierarchy(t *testing.T) {
 	hm, _ := newTestHierarchy()
 	ctx := context.Background()
 
-	_ = hm.SetRelationship(ctx, &types.AgentRelationship{
+	if err := hm.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent: "boss", ChildAgent: "worker-1", Relationship: "supervisor",
-	})
-	_ = hm.SetRelationship(ctx, &types.AgentRelationship{
+	}); err != nil {
+		t.Fatalf("set relationship worker-1: %v", err)
+	}
+	if err := hm.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent: "boss", ChildAgent: "worker-2", Relationship: "supervisor",
-	})
+	}); err != nil {
+		t.Fatalf("set relationship worker-2: %v", err)
+	}
 
 	rels, err := hm.GetFullHierarchy(ctx)
 	if err != nil {

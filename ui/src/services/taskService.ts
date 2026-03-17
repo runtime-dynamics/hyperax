@@ -68,7 +68,7 @@ export interface Project {
 
 // ─── Query Hooks ──────────────────────────────────────────────────────────────
 
-export function useProjects(workspace = 'hyperax') {
+export function useProjects(workspace = '_org') {
   return useQuery({
     queryKey: ['mcp-projects', workspace],
     queryFn: () => mcpCall<Project[]>('project', { action: 'list_projects', workspace_name: workspace }),
@@ -99,7 +99,7 @@ export function useProjectDetails(projectId: string | null) {
   })
 }
 
-export function useTasks(workspace = 'hyperax') {
+export function useTasks(workspace = '_org') {
   return useQuery({
     queryKey: ['mcp-tasks', workspace],
     queryFn: async () => {

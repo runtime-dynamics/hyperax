@@ -200,7 +200,10 @@ func TestE2E_PersonaProviderChatToolUseAudit(t *testing.T) {
 					"total_tokens":      120,
 				},
 			}
-			_ = json.NewEncoder(w).Encode(resp)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 
@@ -225,7 +228,9 @@ func TestE2E_PersonaProviderChatToolUseAudit(t *testing.T) {
 				"total_tokens":      165,
 			},
 		}
-		_ = json.NewEncoder(w).Encode(resp)
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	defer mockLLM.Close()
 
@@ -267,7 +272,10 @@ func TestE2E_PersonaProviderChatToolUseAudit(t *testing.T) {
 		"to":      "TestAssistant",
 		"content": "What workspaces are available?",
 	}
-	bodyJSON, _ := json.Marshal(chatBody)
+	bodyJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		t.Fatalf("marshal chat body: %v", err)
+	}
 	resp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
 	if err != nil {
 		t.Fatalf("POST /api/v1/chat/send: %v", err)
@@ -355,7 +363,10 @@ func TestE2E_ChatSendReturnsDelivered(t *testing.T) {
 		"to":      "user:bob",
 		"content": "Hello Bob!",
 	}
-	bodyJSON, _ := json.Marshal(chatBody)
+	bodyJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		t.Fatalf("marshal chat body: %v", err)
+	}
 	resp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
 	if err != nil {
 		t.Fatalf("POST /api/v1/chat/send: %v", err)
@@ -367,7 +378,9 @@ func TestE2E_ChatSendReturnsDelivered(t *testing.T) {
 	}
 
 	var result map[string]string
-	_ = json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode send response: %v", err)
+	}
 	if result["status"] != "delivered" {
 		t.Errorf("expected status=delivered, got %q", result["status"])
 	}
@@ -388,7 +401,9 @@ func TestE2E_HealthEndpoint(t *testing.T) {
 	}
 
 	var body map[string]string
-	_ = json.NewDecoder(resp.Body).Decode(&body)
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode health response: %v", err)
+	}
 	if body["status"] != "ok" {
 		t.Errorf("expected status=ok, got %q", body["status"])
 	}
@@ -441,7 +456,10 @@ func TestE2E_ChatMissingFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bodyJSON, _ := json.Marshal(tt.body)
+			bodyJSON, err := json.Marshal(tt.body)
+			if err != nil {
+				t.Fatalf("marshal body: %v", err)
+			}
 			resp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
 			if err != nil {
 				t.Fatalf("POST: %v", err)
@@ -462,7 +480,7 @@ func TestE2E_DelegationToDisabledProvider(t *testing.T) {
 	ctx := context.Background()
 
 	// --- Setup: Create providers and agents ---
-	provider1, _ := h.app.Store.Providers.Create(ctx, &repo.Provider{
+	provider1, err := h.app.Store.Providers.Create(ctx, &repo.Provider{
 		Name:      "disabled-provider",
 		Kind:      "openai",
 		BaseURL:   "http://disabled",
@@ -470,8 +488,11 @@ func TestE2E_DelegationToDisabledProvider(t *testing.T) {
 		IsEnabled: false, // DISABLED
 		Models:    `["gpt-4"]`,
 	})
+	if err != nil {
+		t.Fatalf("create disabled provider: %v", err)
+	}
 
-	provider2, _ := h.app.Store.Providers.Create(ctx, &repo.Provider{
+	provider2, err := h.app.Store.Providers.Create(ctx, &repo.Provider{
 		Name:      "enabled-provider",
 		Kind:      "openai",
 		BaseURL:   "http://enabled",
@@ -479,9 +500,12 @@ func TestE2E_DelegationToDisabledProvider(t *testing.T) {
 		IsEnabled: true,
 		Models:    `["gpt-4"]`,
 	})
+	if err != nil {
+		t.Fatalf("create enabled provider: %v", err)
+	}
 
 	// Create disabled agent (using disabled provider)
-	_, _ = h.app.Store.Agents.Create(ctx, &repo.Agent{
+	_, err = h.app.Store.Agents.Create(ctx, &repo.Agent{
 		Name:           "DisabledAgent",
 		Personality:    "Has disabled provider",
 		ClearanceLevel: 1,
@@ -489,9 +513,12 @@ func TestE2E_DelegationToDisabledProvider(t *testing.T) {
 		DefaultModel:   "gpt-4",
 		Status:         "idle",
 	})
+	if err != nil {
+		t.Fatalf("create disabled agent: %v", err)
+	}
 
 	// Create child agent (capable delegate)
-	_, _ = h.app.Store.Agents.Create(ctx, &repo.Agent{
+	_, err = h.app.Store.Agents.Create(ctx, &repo.Agent{
 		Name:           "ChildDelegate",
 		Personality:    "Capable backup",
 		ClearanceLevel: 1,
@@ -499,12 +526,17 @@ func TestE2E_DelegationToDisabledProvider(t *testing.T) {
 		DefaultModel:   "gpt-4",
 		Status:         "idle",
 	})
+	if err != nil {
+		t.Fatalf("create child delegate agent: %v", err)
+	}
 
 	// Setup hierarchy: DisabledAgent -> ChildDelegate
-	h.app.Store.CommHub.SetRelationship(ctx, &types.AgentRelationship{
+	if err := h.app.Store.CommHub.SetRelationship(ctx, &types.AgentRelationship{
 		ParentAgent: "DisabledAgent",
 		ChildAgent:  "ChildDelegate",
-	})
+	}); err != nil {
+		t.Fatalf("set relationship: %v", err)
+	}
 
 	// Subscribe to events
 	getEvents, waitFor := collectEvents(t, h.bus)
@@ -515,7 +547,10 @@ func TestE2E_DelegationToDisabledProvider(t *testing.T) {
 		"to":      "DisabledAgent",
 		"content": "Please help me",
 	}
-	bodyJSON, _ := json.Marshal(chatBody)
+	bodyJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		t.Fatalf("marshal chat body: %v", err)
+	}
 	resp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
 	if err != nil {
 		t.Fatalf("POST /api/v1/chat/send: %v", err)
@@ -528,7 +563,9 @@ func TestE2E_DelegationToDisabledProvider(t *testing.T) {
 	}
 
 	var sendResult map[string]string
-	json.NewDecoder(resp.Body).Decode(&sendResult)
+	if err := json.NewDecoder(resp.Body).Decode(&sendResult); err != nil {
+		t.Fatalf("decode send response: %v", err)
+	}
 	if sendResult["status"] != "delivered" {
 		t.Errorf("expected delivered, got %q", sendResult["status"])
 	}
@@ -543,7 +580,10 @@ func TestE2E_DelegationToDisabledProvider(t *testing.T) {
 	}
 
 	// --- Verify agent was suspended ---
-	agent, _ := h.app.Store.Agents.GetByName(ctx, "DisabledAgent")
+	agent, err := h.app.Store.Agents.GetByName(ctx, "DisabledAgent")
+	if err != nil {
+		t.Fatalf("get disabled agent: %v", err)
+	}
 	if agent.Status != "suspended" {
 		t.Errorf("expected agent status=suspended, got %q", agent.Status)
 	}
@@ -564,21 +604,27 @@ func TestE2E_DelegationFailureToTerminal(t *testing.T) {
 	ctx := context.Background()
 
 	// Create disabled provider
-	disabledProv, _ := h.app.Store.Providers.Create(ctx, &repo.Provider{
+	disabledProv, err := h.app.Store.Providers.Create(ctx, &repo.Provider{
 		Name:      "disabled-provider",
 		Kind:      "openai",
 		BaseURL:   "http://disabled",
 		IsEnabled: false,
 		Models:    `["gpt-4"]`,
 	})
+	if err != nil {
+		t.Fatalf("create disabled provider: %v", err)
+	}
 
 	// Create isolated agent (no children, no parent, disabled provider)
-	_, _ = h.app.Store.Agents.Create(ctx, &repo.Agent{
+	_, err = h.app.Store.Agents.Create(ctx, &repo.Agent{
 		Name:         "IsolatedDisabled",
 		ProviderID:   disabledProv,
 		DefaultModel: "gpt-4",
 		Status:       "idle",
 	})
+	if err != nil {
+		t.Fatalf("create isolated agent: %v", err)
+	}
 
 	getEvents, waitFor := collectEvents(t, h.bus)
 
@@ -588,8 +634,15 @@ func TestE2E_DelegationFailureToTerminal(t *testing.T) {
 		"to":      "IsolatedDisabled",
 		"content": "Help me",
 	}
-	bodyJSON, _ := json.Marshal(chatBody)
-	http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
+	bodyJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		t.Fatalf("marshal chat body: %v", err)
+	}
+	resp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
+	if err != nil {
+		t.Fatalf("POST /api/v1/chat/send: %v", err)
+	}
+	defer resp.Body.Close()
 
 	// Should see delegation exhausted event
 	if !waitFor(types.EventDelegationExhausted, 2*time.Second) {
@@ -622,32 +675,40 @@ func TestE2E_ProviderReEnable(t *testing.T) {
 	ctx := context.Background()
 
 	// Create provider (enabled)
-	provID, _ := h.app.Store.Providers.Create(ctx, &repo.Provider{
+	provID, err := h.app.Store.Providers.Create(ctx, &repo.Provider{
 		Name:      "toggleprov",
 		Kind:      "openai",
 		BaseURL:   "http://toggle",
 		IsEnabled: true,
 		Models:    `["gpt-4"]`,
 	})
+	if err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
 
 	// Create agent
-	agentID, _ := h.app.Store.Agents.Create(ctx, &repo.Agent{
+	agentID, err := h.app.Store.Agents.Create(ctx, &repo.Agent{
 		Name:           "TestAgent",
 		ProviderID:     provID,
 		DefaultModel:   "gpt-4",
 		Status:         "idle",
 		ClearanceLevel: 1,
 	})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
 
 	// Manually suspend the agent with provider disabled reason
-	h.app.Store.Agents.Update(ctx, agentID, &repo.Agent{
+	if err := h.app.Store.Agents.Update(ctx, agentID, &repo.Agent{
 		Name:           "TestAgent",
 		ProviderID:     provID,
 		DefaultModel:   "gpt-4",
 		Status:         "suspended",
 		StatusReason:   "provider disabled",
 		ClearanceLevel: 1,
-	})
+	}); err != nil {
+		t.Fatalf("suspend agent: %v", err)
+	}
 
 	getEvents, waitFor := collectEvents(t, h.bus)
 
@@ -659,7 +720,9 @@ func TestE2E_ProviderReEnable(t *testing.T) {
 		IsEnabled: false,
 		Models:    `["gpt-4"]`,
 	}
-	h.app.Store.Providers.Update(ctx, provID, disabledProv)
+	if err := h.app.Store.Providers.Update(ctx, provID, disabledProv); err != nil {
+		t.Fatalf("disable provider: %v", err)
+	}
 
 	// Re-enable the provider
 	enabledProv := &repo.Provider{
@@ -669,7 +732,9 @@ func TestE2E_ProviderReEnable(t *testing.T) {
 		IsEnabled: true,
 		Models:    `["gpt-4"]`,
 	}
-	h.app.Store.Providers.Update(ctx, provID, enabledProv)
+	if err := h.app.Store.Providers.Update(ctx, provID, enabledProv); err != nil {
+		t.Fatalf("re-enable provider: %v", err)
+	}
 
 	// Wait for re-enable event
 	if !waitFor(types.EventProviderReEnabled, 2*time.Second) {
@@ -677,7 +742,10 @@ func TestE2E_ProviderReEnable(t *testing.T) {
 	}
 
 	// Verify agent was reactivated to idle
-	agent, _ := h.app.Store.Agents.Get(ctx, agentID)
+	agent, err := h.app.Store.Agents.Get(ctx, agentID)
+	if err != nil {
+		t.Fatalf("get agent: %v", err)
+	}
 	if agent.Status != "idle" {
 		t.Errorf("expected agent status=idle after provider re-enable, got %q", agent.Status)
 	}
@@ -712,21 +780,27 @@ func TestE2E_NormalMessageFlowUnaffected(t *testing.T) {
 	ctx := context.Background()
 
 	// Create enabled provider
-	provID, _ := h.app.Store.Providers.Create(ctx, &repo.Provider{
+	provID, err := h.app.Store.Providers.Create(ctx, &repo.Provider{
 		Name:      "normal-prov",
 		Kind:      "openai",
 		BaseURL:   "http://normal",
 		IsEnabled: true,
 		Models:    `["gpt-4"]`,
 	})
+	if err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
 
 	// Create agent with enabled provider
-	_, _ = h.app.Store.Agents.Create(ctx, &repo.Agent{
+	_, err = h.app.Store.Agents.Create(ctx, &repo.Agent{
 		Name:         "NormalAgent",
 		ProviderID:   provID,
 		DefaultModel: "gpt-4",
 		Status:       "idle",
 	})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
 
 	// Send message (no delegation logic should trigger)
 	chatBody := map[string]string{
@@ -734,7 +808,10 @@ func TestE2E_NormalMessageFlowUnaffected(t *testing.T) {
 		"to":      "NormalAgent",
 		"content": "Normal request",
 	}
-	bodyJSON, _ := json.Marshal(chatBody)
+	bodyJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		t.Fatalf("marshal chat body: %v", err)
+	}
 	resp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
 	if err != nil {
 		t.Fatalf("POST /api/v1/chat/send: %v", err)
@@ -747,7 +824,9 @@ func TestE2E_NormalMessageFlowUnaffected(t *testing.T) {
 	}
 
 	var result map[string]string
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode send response: %v", err)
+	}
 	if result["status"] != "delivered" {
 		t.Errorf("expected delivered, got %q", result["status"])
 	}

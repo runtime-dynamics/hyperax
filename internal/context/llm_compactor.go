@@ -193,7 +193,7 @@ func buildCompactionPrompt(systemPrompt string, olderTurns []CompactMessage) str
 	sb.WriteString("Here is the conversation to summarize:\n\n")
 
 	for _, msg := range olderTurns {
-		sb.WriteString(fmt.Sprintf("[%s]: %s\n\n", msg.Role, msg.Content))
+		fmt.Fprintf(&sb, "[%s]: %s\n\n", msg.Role, msg.Content)
 	}
 
 	return sb.String()

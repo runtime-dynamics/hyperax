@@ -240,7 +240,11 @@ func (sm *SensorManager) executeHTTP(ctx context.Context, action *types.SensorAc
 	if err != nil {
 		return "", fmt.Errorf("http request: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			sm.logger.Warn("executeHTTP: failed to close response body", "error", cerr)
+		}
+	}()
 
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {

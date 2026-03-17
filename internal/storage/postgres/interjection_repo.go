@@ -246,7 +246,10 @@ func (r *InterjectionRepo) ExpireBypasses(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("postgres.InterjectionRepo.ExpireBypasses: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("postgres.InterjectionRepo.ExpireBypasses: %w", err)
+	}
 	return int(n), nil
 }
 

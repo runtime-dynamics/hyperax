@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"time"
 
 	"github.com/hyperax/hyperax/pkg/types"
 	"golang.org/x/crypto/bcrypt"
@@ -184,15 +182,24 @@ func scanToken(rows *sql.Rows) (*types.MCPToken, error) {
 	}
 
 	if err := json.Unmarshal([]byte(scopesRaw), &t.Scopes); err != nil {
-		slog.Error("failed to unmarshal token scopes from database", "error", err)
+		return nil, fmt.Errorf("sqlite.scanToken: unmarshal scopes: %w", err)
 	}
-	t.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
+	var err error
+	if t.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.scanToken"); err != nil {
+		return nil, err
+	}
 	if expiresAt.Valid {
-		parsed, _ := time.Parse(sqliteTimeFormat, expiresAt.String)
+		parsed, err := parseSQLiteTime(expiresAt.String, "sqlite.scanToken.expiresAt")
+		if err != nil {
+			return nil, err
+		}
 		t.ExpiresAt = &parsed
 	}
 	if revokedAt.Valid {
-		parsed, _ := time.Parse(sqliteTimeFormat, revokedAt.String)
+		parsed, err := parseSQLiteTime(revokedAt.String, "sqlite.scanToken.revokedAt")
+		if err != nil {
+			return nil, err
+		}
 		t.RevokedAt = &parsed
 	}
 
@@ -217,15 +224,24 @@ func scanTokenRow(row *sql.Row) (*types.MCPToken, error) {
 	}
 
 	if err := json.Unmarshal([]byte(scopesRaw), &t.Scopes); err != nil {
-		slog.Error("failed to unmarshal token scopes from database", "error", err)
+		return nil, fmt.Errorf("sqlite.scanTokenRow: unmarshal scopes: %w", err)
 	}
-	t.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
+	var err error
+	if t.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.scanTokenRow"); err != nil {
+		return nil, err
+	}
 	if expiresAt.Valid {
-		parsed, _ := time.Parse(sqliteTimeFormat, expiresAt.String)
+		parsed, err := parseSQLiteTime(expiresAt.String, "sqlite.scanTokenRow.expiresAt")
+		if err != nil {
+			return nil, err
+		}
 		t.ExpiresAt = &parsed
 	}
 	if revokedAt.Valid {
-		parsed, _ := time.Parse(sqliteTimeFormat, revokedAt.String)
+		parsed, err := parseSQLiteTime(revokedAt.String, "sqlite.scanTokenRow.revokedAt")
+		if err != nil {
+			return nil, err
+		}
 		t.RevokedAt = &parsed
 	}
 

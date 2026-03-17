@@ -155,11 +155,15 @@ func TestHistory(t *testing.T) {
 	req1 := &EvalRequest{ToolName: "tool_a", ToolAction: "write", ToolParams: json.RawMessage(`{}`)}
 	req2 := &EvalRequest{ToolName: "tool_b", ToolAction: "delete", ToolParams: json.RawMessage(`{}`)}
 
-	id1, _ := mgr.CreatePending(req1, "guard_a", 10*time.Second)
-	id2, _ := mgr.CreatePending(req2, "guard_b", 10*time.Second)
+	id1, _ := mgr.CreatePending(req1, "guard_a", 10*time.Second) // channel return intentionally unused
+	id2, _ := mgr.CreatePending(req2, "guard_b", 10*time.Second) // channel return intentionally unused
 
-	_, _ = mgr.Approve(id1, "admin", "ok")
-	_, _ = mgr.Reject(id2, "admin", "no")
+	if _, err := mgr.Approve(id1, "admin", "ok"); err != nil {
+		t.Fatalf("Approve: %v", err)
+	}
+	if _, err := mgr.Reject(id2, "admin", "no"); err != nil {
+		t.Fatalf("Reject: %v", err)
+	}
 
 	history := mgr.History(10)
 	if len(history) != 2 {

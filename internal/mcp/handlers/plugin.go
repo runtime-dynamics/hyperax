@@ -226,7 +226,10 @@ func (h *PluginHandler) installPlugin(ctx context.Context, params json.RawMessag
 
 		var ghToken string
 		if h.secretReg != nil {
-			ghToken, _ = secrets.ResolveSecretRef(ctx, h.secretReg, "secret:GITHUB_PLUGIN_TOKEN:system")
+			ghToken, err = secrets.ResolveSecretRef(ctx, h.secretReg, "secret:GITHUB_PLUGIN_TOKEN:system")
+			if err != nil {
+				slog.Warn("failed to resolve GitHub plugin token, proceeding without auth", "error", err)
+			}
 		}
 
 		logger := slog.Default()
@@ -281,7 +284,11 @@ func (h *PluginHandler) fetchRemoteManifest(ctx context.Context, rawURL string) 
 	if err != nil {
 		return nil, fmt.Errorf("fetch manifest: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Warn("failed to close response body", "error", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d from %s", resp.StatusCode, rawURL)
@@ -542,7 +549,10 @@ func (h *PluginHandler) upgradePlugin(ctx context.Context, params json.RawMessag
 		}
 		var ghToken string
 		if h.secretReg != nil {
-			ghToken, _ = secrets.ResolveSecretRef(ctx, h.secretReg, "secret:GITHUB_PLUGIN_TOKEN:system")
+			ghToken, err = secrets.ResolveSecretRef(ctx, h.secretReg, "secret:GITHUB_PLUGIN_TOKEN:system")
+			if err != nil {
+				slog.Warn("failed to resolve GitHub plugin token for upgrade, proceeding without auth", "error", err)
+			}
 		}
 		logger := slog.Default()
 		m, err := plugin.FetchRelease(ctx, *src, ghToken, h.manager.PluginDir(), logger)
@@ -846,10 +856,13 @@ func (h *PluginHandler) requestPluginApproval(ctx context.Context, params json.R
 	sendToolName := fmt.Sprintf("plugin_%s_send_message", args.Name)
 
 	if h.toolRegistry != nil && h.toolRegistry.HasTool(sendToolName) {
-		sendParams, _ := json.Marshal(map[string]string{
+		sendParams, marshalErr := json.Marshal(map[string]string{
 			"channel_id": args.ChannelID,
 			"content":    fmt.Sprintf("**Hyperax Plugin Verification**\n\nYour approval code is: `%s`\n\nEnter this code in the Hyperax UI to approve the %s plugin connection.\nThis code expires in 10 minutes.", code, args.Name),
 		})
+		if marshalErr != nil {
+			return types.NewErrorResult(fmt.Sprintf("failed to marshal send params: %v", marshalErr)), nil
+		}
 
 		_, toolErr := h.toolRegistry.Dispatch(ctx, sendToolName, sendParams)
 		if toolErr != nil {
@@ -970,7 +983,11 @@ func (h *PluginHandler) refreshCatalog(ctx context.Context, _ json.RawMessage) (
 
 	var ghToken string
 	if h.secretReg != nil {
-		ghToken, _ = secrets.ResolveSecretRef(ctx, h.secretReg, "secret:GITHUB_PLUGIN_TOKEN:system")
+		var tokenErr error
+		ghToken, tokenErr = secrets.ResolveSecretRef(ctx, h.secretReg, "secret:GITHUB_PLUGIN_TOKEN:system")
+		if tokenErr != nil {
+			slog.Warn("failed to resolve GitHub plugin token for catalog refresh, proceeding without auth", "error", tokenErr)
+		}
 	}
 
 	added, updated, err := h.catalog.Refresh(ctx, "runtime-dynamics", "hax-plugin-", ghToken)
@@ -1001,7 +1018,11 @@ func (h *PluginHandler) listPluginVersions(ctx context.Context, params json.RawM
 
 	var ghToken string
 	if h.secretReg != nil {
-		ghToken, _ = secrets.ResolveSecretRef(ctx, h.secretReg, "secret:GITHUB_PLUGIN_TOKEN:system")
+		var tokenErr error
+		ghToken, tokenErr = secrets.ResolveSecretRef(ctx, h.secretReg, "secret:GITHUB_PLUGIN_TOKEN:system")
+		if tokenErr != nil {
+			slog.Warn("failed to resolve GitHub plugin token for version list, proceeding without auth", "error", tokenErr)
+		}
 	}
 
 	versions, err := h.catalog.ListVersions(ctx, args.Name, ghToken)

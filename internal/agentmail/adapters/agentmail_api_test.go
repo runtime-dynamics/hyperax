@@ -111,7 +111,9 @@ func TestAgentMailAPIAdapter_Send(t *testing.T) {
 
 func TestAgentMailAPIAdapter_Send_NilMail(t *testing.T) {
 	a := NewAgentMailAPIAdapter(AgentMailAPIConfig{}, nil, testLogger())
-	_ = a.Start(context.Background())
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
 	err := a.Send(context.Background(), nil)
 	if err == nil {
 		t.Fatal("expected error for nil mail")
@@ -129,8 +131,10 @@ func TestAgentMailAPIAdapter_Send_ServerError(t *testing.T) {
 		BaseURL:   srv.URL,
 		APIKeyRef: "secret:api_key",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	err := a.Send(context.Background(), &types.AgentMail{
 		ID: "err-test", From: "a", To: "b", Priority: types.MailPriorityStandard, SentAt: time.Now(),
@@ -172,8 +176,10 @@ func TestAgentMailAPIAdapter_Receive(t *testing.T) {
 		InstanceID: "local",
 		APIKeyRef:  "secret:api_key",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	received, err := a.Receive(context.Background())
 	if err != nil {
@@ -199,8 +205,10 @@ func TestAgentMailAPIAdapter_Receive_Empty(t *testing.T) {
 		InstanceID: "local",
 		APIKeyRef:  "secret:api_key",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	received, err := a.Receive(context.Background())
 	if err != nil {
@@ -223,8 +231,10 @@ func TestAgentMailAPIAdapter_Receive_ServerError(t *testing.T) {
 		InstanceID: "local",
 		APIKeyRef:  "secret:api_key",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	_, err := a.Receive(context.Background())
 	if err == nil {

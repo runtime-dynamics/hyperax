@@ -177,7 +177,10 @@ func (m *GuardMiddleware) WrapDispatch(
 			"tool":       name,
 			"expires_at": time.Now().Add(timeout).Format(time.RFC3339),
 		}
-		resultJSON, _ := json.Marshal(result)
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return nil, fmt.Errorf("guard.GuardMiddleware: marshal pending result: %w", err)
+		}
 		return &types.ToolResult{
 			Content: []types.ToolContent{{Text: string(resultJSON)}},
 		}, nil

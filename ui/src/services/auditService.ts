@@ -309,7 +309,7 @@ export interface UpdateAuditItemArgs {
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-export function useAudits(workspaceName = 'hyperax') {
+export function useAudits(workspaceName = '_org') {
   return useQuery({
     queryKey: ['audits', workspaceName],
     queryFn: () => mcpCall<AuditRun[]>('audit', { action: 'list', workspace_name: workspaceName }),

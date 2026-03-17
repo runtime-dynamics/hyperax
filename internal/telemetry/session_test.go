@@ -340,7 +340,10 @@ func TestSessionTracker_RecordToolCall_AutoEstimatesCost(t *testing.T) {
 	tracker := NewSessionTracker(repo, bus, testLogger())
 
 	ctx := context.Background()
-	id, _ := tracker.StartSession(ctx, "agent-1", "")
+	id, err := tracker.StartSession(ctx, "agent-1", "")
+	if err != nil {
+		t.Fatalf("StartSession: %v", err)
+	}
 
 	metric := &types.ToolCallMetric{
 		ToolName:  "search_code",
@@ -350,7 +353,9 @@ func TestSessionTracker_RecordToolCall_AutoEstimatesCost(t *testing.T) {
 		Cost:      0, // should be auto-estimated
 	}
 
-	_ = tracker.RecordToolCall(ctx, id, metric)
+	if err := tracker.RecordToolCall(ctx, id, metric); err != nil {
+		t.Fatalf("RecordToolCall: %v", err)
+	}
 
 	if metric.Cost <= 0 {
 		t.Errorf("cost should have been auto-estimated, got %f", metric.Cost)
@@ -374,8 +379,14 @@ func TestSessionTracker_MultipleAgents(t *testing.T) {
 	tracker := NewSessionTracker(repo, bus, testLogger())
 
 	ctx := context.Background()
-	id1, _ := tracker.StartSession(ctx, "agent-1", "")
-	id2, _ := tracker.StartSession(ctx, "agent-2", "")
+	id1, err := tracker.StartSession(ctx, "agent-1", "")
+	if err != nil {
+		t.Fatalf("StartSession agent-1: %v", err)
+	}
+	id2, err := tracker.StartSession(ctx, "agent-2", "")
+	if err != nil {
+		t.Fatalf("StartSession agent-2: %v", err)
+	}
 
 	if id1 == id2 {
 		t.Error("session IDs should be unique")
@@ -408,7 +419,10 @@ func TestSessionTracker_EventBusPublish(t *testing.T) {
 	ctx := context.Background()
 
 	// Start session -> should publish session start event.
-	id, _ := tracker.StartSession(ctx, "agent-1", "")
+	id, err := tracker.StartSession(ctx, "agent-1", "")
+	if err != nil {
+		t.Fatalf("StartSession: %v", err)
+	}
 
 	select {
 	case ev := <-sub.Ch:
@@ -420,12 +434,14 @@ func TestSessionTracker_EventBusPublish(t *testing.T) {
 	}
 
 	// Record tool call -> should publish tool call event.
-	_ = tracker.RecordToolCall(ctx, id, &types.ToolCallMetric{
+	if err := tracker.RecordToolCall(ctx, id, &types.ToolCallMetric{
 		ToolName:  "test_tool",
 		StartedAt: time.Now(),
 		Duration:  10 * time.Millisecond,
 		Success:   true,
-	})
+	}); err != nil {
+		t.Fatalf("RecordToolCall: %v", err)
+	}
 
 	select {
 	case ev := <-sub.Ch:
@@ -437,7 +453,9 @@ func TestSessionTracker_EventBusPublish(t *testing.T) {
 	}
 
 	// End session -> should publish session end event.
-	_ = tracker.EndSession(ctx, id)
+	if err := tracker.EndSession(ctx, id); err != nil {
+		t.Fatalf("EndSession: %v", err)
+	}
 
 	select {
 	case ev := <-sub.Ch:

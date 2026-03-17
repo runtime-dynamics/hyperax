@@ -92,7 +92,9 @@ func TestSchemaRegistry_Register_Get(t *testing.T) {
 
 func TestSchemaRegistry_Register_Duplicate(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{SchemaID: "test.payload.v1"})
+	if err := reg.Register(&SchemaVersion{SchemaID: "test.payload.v1"}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
 	err := reg.Register(&SchemaVersion{SchemaID: "test.payload.v1"})
 	if err == nil {
 		t.Fatal("expected error for duplicate registration")
@@ -120,11 +122,18 @@ func TestSchemaRegistry_Get_InvalidID(t *testing.T) {
 	}
 }
 
+func mustRegister(t *testing.T, reg *SchemaRegistry, sv *SchemaVersion) {
+	t.Helper()
+	if err := reg.Register(sv); err != nil {
+		t.Fatalf("register schema %q: %v", sv.SchemaID, err)
+	}
+}
+
 func TestSchemaRegistry_Latest(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{SchemaID: "test.msg.v1"})
-	_ = reg.Register(&SchemaVersion{SchemaID: "test.msg.v3"})
-	_ = reg.Register(&SchemaVersion{SchemaID: "test.msg.v2"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "test.msg.v1"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "test.msg.v3"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "test.msg.v2"})
 
 	latest := reg.Latest("test", "msg")
 	if latest == nil {
@@ -144,9 +153,9 @@ func TestSchemaRegistry_Latest_NotFound(t *testing.T) {
 
 func TestSchemaRegistry_Versions(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{SchemaID: "test.msg.v3"})
-	_ = reg.Register(&SchemaVersion{SchemaID: "test.msg.v1"})
-	_ = reg.Register(&SchemaVersion{SchemaID: "test.msg.v2"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "test.msg.v3"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "test.msg.v1"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "test.msg.v2"})
 
 	versions := reg.Versions("test", "msg")
 	if len(versions) != 3 {
@@ -206,7 +215,7 @@ func TestSchemaRegistry_Negotiate_InvalidRequested(t *testing.T) {
 
 func TestSchemaRegistry_Validate_Pass(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{
+	mustRegister(t, reg, &SchemaVersion{
 		SchemaID:       "test.msg.v1",
 		Fields:         map[string]string{"text": "string", "count": "number"},
 		RequiredFields: []string{"text"},
@@ -220,7 +229,7 @@ func TestSchemaRegistry_Validate_Pass(t *testing.T) {
 
 func TestSchemaRegistry_Validate_MissingRequired(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{
+	mustRegister(t, reg, &SchemaVersion{
 		SchemaID:       "test.msg.v1",
 		Fields:         map[string]string{"text": "string"},
 		RequiredFields: []string{"text"},
@@ -238,7 +247,7 @@ func TestSchemaRegistry_Validate_MissingRequired(t *testing.T) {
 
 func TestSchemaRegistry_Validate_TypeMismatch(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{
+	mustRegister(t, reg, &SchemaVersion{
 		SchemaID: "test.msg.v1",
 		Fields:   map[string]string{"text": "string", "count": "number"},
 	})
@@ -263,7 +272,7 @@ func TestSchemaRegistry_Validate_UnknownSchema(t *testing.T) {
 
 func TestSchemaRegistry_Validate_EmptyPayload(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{
+	mustRegister(t, reg, &SchemaVersion{
 		SchemaID:       "test.msg.v1",
 		RequiredFields: []string{"text"},
 	})
@@ -276,7 +285,7 @@ func TestSchemaRegistry_Validate_EmptyPayload(t *testing.T) {
 
 func TestSchemaRegistry_Validate_EmptyPayload_NoRequired(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{
+	mustRegister(t, reg, &SchemaVersion{
 		SchemaID: "test.msg.v1",
 	})
 
@@ -287,7 +296,7 @@ func TestSchemaRegistry_Validate_EmptyPayload_NoRequired(t *testing.T) {
 
 func TestSchemaRegistry_Validate_InvalidJSON(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{
+	mustRegister(t, reg, &SchemaVersion{
 		SchemaID: "test.msg.v1",
 		Fields:   map[string]string{"x": "string"},
 	})
@@ -300,9 +309,9 @@ func TestSchemaRegistry_Validate_InvalidJSON(t *testing.T) {
 
 func TestSchemaRegistry_List(t *testing.T) {
 	reg := NewSchemaRegistry()
-	_ = reg.Register(&SchemaVersion{SchemaID: "b.msg.v1"})
-	_ = reg.Register(&SchemaVersion{SchemaID: "a.msg.v1"})
-	_ = reg.Register(&SchemaVersion{SchemaID: "a.msg.v2"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "b.msg.v1"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "a.msg.v1"})
+	mustRegister(t, reg, &SchemaVersion{SchemaID: "a.msg.v2"})
 
 	ids := reg.List()
 	if len(ids) != 3 {

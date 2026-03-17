@@ -134,20 +134,24 @@ func setupConfigHandler(t *testing.T) (*ConfigHandler, *configTestRepo, context.
 	handler := NewConfigHandler(store, repo)
 
 	// Seed a test key so Resolve and Set can find it.
-	_ = repo.UpsertKeyMeta(context.Background(), &types.ConfigKeyMeta{
+	if err := repo.UpsertKeyMeta(context.Background(), &types.ConfigKeyMeta{
 		Key:         "test.key",
 		ScopeType:   "global",
 		ValueType:   "string",
 		DefaultVal:  "default-val",
 		Description: "A test configuration key",
-	})
-	_ = repo.UpsertKeyMeta(context.Background(), &types.ConfigKeyMeta{
+	}); err != nil {
+		t.Fatalf("seed test.key: %v", err)
+	}
+	if err := repo.UpsertKeyMeta(context.Background(), &types.ConfigKeyMeta{
 		Key:         "log.level",
 		ScopeType:   "global",
 		ValueType:   "string",
 		DefaultVal:  "info",
 		Description: "Logging level",
-	})
+	}); err != nil {
+		t.Fatalf("seed log.level: %v", err)
+	}
 
 	return handler, repo, context.Background()
 }
@@ -436,10 +440,14 @@ func TestConfigHandler_GetConfig_ScopeResolution(t *testing.T) {
 	h, repo, ctx := setupConfigHandler(t)
 
 	// Set global value.
-	_ = repo.SetValue(ctx, "test.key", "global-val", types.ConfigScope{Type: "global", ID: ""}, "setup")
+	if err := repo.SetValue(ctx, "test.key", "global-val", types.ConfigScope{Type: "global", ID: ""}, "setup"); err != nil {
+		t.Fatalf("set global value: %v", err)
+	}
 
 	// Set workspace value.
-	_ = repo.SetValue(ctx, "test.key", "ws-val", types.ConfigScope{Type: "workspace", ID: "my-ws"}, "setup")
+	if err := repo.SetValue(ctx, "test.key", "ws-val", types.ConfigScope{Type: "workspace", ID: "my-ws"}, "setup"); err != nil {
+		t.Fatalf("set workspace value: %v", err)
+	}
 
 	// Resolve without scope should get global.
 	type getArgs struct {
@@ -450,14 +458,18 @@ func TestConfigHandler_GetConfig_ScopeResolution(t *testing.T) {
 
 	result := callConfigTool(t, h.getConfig, ctx, getArgs{Key: "test.key"})
 	var out map[string]string
-	_ = json.Unmarshal([]byte(configResultText(result)), &out)
+	if err := json.Unmarshal([]byte(configResultText(result)), &out); err != nil {
+		t.Fatalf("unmarshal config result: %v", err)
+	}
 	if out["value"] != "global-val" {
 		t.Errorf("expected global-val, got %q", out["value"])
 	}
 
 	// Resolve with workspace should get workspace value.
 	result = callConfigTool(t, h.getConfig, ctx, getArgs{Key: "test.key", WorkspaceID: "my-ws"})
-	_ = json.Unmarshal([]byte(configResultText(result)), &out)
+	if err := json.Unmarshal([]byte(configResultText(result)), &out); err != nil {
+		t.Fatalf("unmarshal config result: %v", err)
+	}
 	if out["value"] != "ws-val" {
 		t.Errorf("expected ws-val, got %q", out["value"])
 	}

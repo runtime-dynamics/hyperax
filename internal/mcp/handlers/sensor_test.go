@@ -132,42 +132,59 @@ func TestSensorHandler_CRUD_Lifecycle(t *testing.T) {
 		"sensor_action": {"type": "shell", "command": "echo ok"},
 		"event_config": {"event_type": "test.event"}
 	}`)
-	createResult, _ := registry.Dispatch(operatorCtx(), "event", createParams)
+	createResult, err := registry.Dispatch(operatorCtx(), "event", createParams)
+	if err != nil {
+		t.Fatalf("dispatch create: %v", err)
+	}
 	if createResult.IsError {
 		t.Fatalf("create failed: %s", createResult.Content[0].Text)
 	}
 
 	// Extract ID from response.
 	var createResp map[string]any
-	_ = json.Unmarshal([]byte(createResult.Content[0].Text), &createResp)
+	if err := json.Unmarshal([]byte(createResult.Content[0].Text), &createResp); err != nil {
+		t.Fatalf("unmarshal create response: %v", err)
+	}
 	sensorID := createResp["id"].(string)
 
 	// Update
-	updateParams, _ := json.Marshal(map[string]string{
+	updateParams := mustMarshalJSON(t, map[string]string{
 		"action": "update_sensor_cadence",
 		"id":     sensorID,
 		"name":   "updated-sensor",
 	})
-	updateResult, _ := registry.Dispatch(operatorCtx(), "event", updateParams)
+	updateResult, err := registry.Dispatch(operatorCtx(), "event", updateParams)
+	if err != nil {
+		t.Fatalf("dispatch update: %v", err)
+	}
 	if updateResult.IsError {
 		t.Fatalf("update failed: %s", updateResult.Content[0].Text)
 	}
 
 	// List (should have 1)
-	listResult, _ := registry.Dispatch(operatorCtx(), "event", json.RawMessage(`{"action":"list_sensor_cadences"}`))
+	listResult, err := registry.Dispatch(operatorCtx(), "event", json.RawMessage(`{"action":"list_sensor_cadences"}`))
+	if err != nil {
+		t.Fatalf("dispatch list: %v", err)
+	}
 	if strings.Contains(listResult.Content[0].Text, "No sensor") {
 		t.Error("expected sensor in list after create")
 	}
 
 	// Delete
-	deleteParams, _ := json.Marshal(map[string]string{"action": "delete_sensor_cadence", "id": sensorID})
-	deleteResult, _ := registry.Dispatch(operatorCtx(), "event", deleteParams)
+	deleteParams := mustMarshalJSON(t, map[string]string{"action": "delete_sensor_cadence", "id": sensorID})
+	deleteResult, err := registry.Dispatch(operatorCtx(), "event", deleteParams)
+	if err != nil {
+		t.Fatalf("dispatch delete: %v", err)
+	}
 	if deleteResult.IsError {
 		t.Fatalf("delete failed: %s", deleteResult.Content[0].Text)
 	}
 
 	// List again (should be empty)
-	listResult2, _ := registry.Dispatch(operatorCtx(), "event", json.RawMessage(`{"action":"list_sensor_cadences"}`))
+	listResult2, err := registry.Dispatch(operatorCtx(), "event", json.RawMessage(`{"action":"list_sensor_cadences"}`))
+	if err != nil {
+		t.Fatalf("dispatch list after delete: %v", err)
+	}
 	if !strings.Contains(listResult2.Content[0].Text, "No sensor") {
 		t.Error("expected empty list after delete")
 	}
@@ -179,7 +196,10 @@ func TestSensorHandler_DeleteNonexistent(t *testing.T) {
 	handler.RegisterTools(registry)
 
 	params := json.RawMessage(`{"action":"delete_sensor_cadence", "id": "nonexistent-id"}`)
-	result, _ := registry.Dispatch(operatorCtx(), "event", params)
+	result, err := registry.Dispatch(operatorCtx(), "event", params)
+	if err != nil {
+		t.Fatalf("dispatch delete: %v", err)
+	}
 	if !result.IsError {
 		t.Error("expected error deleting nonexistent sensor")
 	}

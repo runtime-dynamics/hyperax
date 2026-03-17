@@ -72,6 +72,16 @@ func resultText(r *types.ToolResult) string {
 	return r.Content[0].Text
 }
 
+// mustMarshalJSON marshals v to JSON, failing the test on error.
+func mustMarshalJSON(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	return data
+}
+
 // writeFile creates a file relative to root with the given content.
 func writeFile(t *testing.T, root, relPath, content string) {
 	t.Helper()

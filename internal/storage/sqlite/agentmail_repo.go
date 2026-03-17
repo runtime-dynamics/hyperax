@@ -188,7 +188,9 @@ func (r *AgentMailRepo) GetByID(ctx context.Context, id string) (*types.AgentMai
 	m.Payload = json.RawMessage(payload)
 	m.Encrypted = encrypted != 0
 	m.AckDeadline = time.Duration(ackMs) * time.Millisecond
-	m.SentAt, _ = time.Parse(sqliteTimeFormat, sentAt)
+	if m.SentAt, err = parseSQLiteTime(sentAt, "sqlite.AgentMailRepo.GetByID"); err != nil {
+		return nil, err
+	}
 
 	return m, nil
 }
@@ -199,7 +201,10 @@ func (r *AgentMailRepo) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("sqlite.AgentMailRepo.Delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("sqlite.AgentMailRepo.Delete: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("mail %q not found", id)
 	}
@@ -255,7 +260,9 @@ func (r *AgentMailRepo) GetAck(ctx context.Context, mailID string) (*types.MailA
 		return nil, fmt.Errorf("sqlite.AgentMailRepo.GetAck: %w", err)
 	}
 
-	ack.AckedAt, _ = time.Parse(sqliteTimeFormat, ackedAt)
+	if ack.AckedAt, err = parseSQLiteTime(ackedAt, "sqlite.AgentMailRepo.GetAck"); err != nil {
+		return nil, err
+	}
 	return ack, nil
 }
 
@@ -353,7 +360,10 @@ func (r *AgentMailRepo) ListDLO(ctx context.Context, limit int) ([]*types.DeadLe
 			return nil, fmt.Errorf("sqlite.AgentMailRepo.ListDLO: %w", err)
 		}
 
-		e.QuarantinedAt, _ = time.Parse(sqliteTimeFormat, quarantinedAt)
+		var parseErr error
+		if e.QuarantinedAt, parseErr = parseSQLiteTime(quarantinedAt, "sqlite.AgentMailRepo.ListDLO"); parseErr != nil {
+			return nil, parseErr
+		}
 		if originalJSON != "" && originalJSON != "{}" {
 			var m types.AgentMail
 			if err := json.Unmarshal([]byte(originalJSON), &m); err == nil {
@@ -375,7 +385,10 @@ func (r *AgentMailRepo) RemoveFromDLO(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("sqlite.AgentMailRepo.RemoveFromDLO: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("sqlite.AgentMailRepo.RemoveFromDLO: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("DLO entry %q not found", id)
 	}
@@ -400,7 +413,10 @@ func scanMail(rows *sql.Rows) (*types.AgentMail, error) {
 	m.Payload = json.RawMessage(payload)
 	m.Encrypted = encrypted != 0
 	m.AckDeadline = time.Duration(ackMs) * time.Millisecond
-	m.SentAt, _ = time.Parse(sqliteTimeFormat, sentAt)
+	var parseErr error
+	if m.SentAt, parseErr = parseSQLiteTime(sentAt, "sqlite.scanMail"); parseErr != nil {
+		return nil, parseErr
+	}
 
 	return m, nil
 }

@@ -572,7 +572,7 @@ function ResolveInterjectionDialog({
     setResolutionError('')
 
     resolve(
-      { id: interjection.id, action, resolution: resolution.trim() },
+      { id: interjection.id, resolution_action: action, resolution: resolution.trim() },
       {
         onSuccess: () => {
           toast({

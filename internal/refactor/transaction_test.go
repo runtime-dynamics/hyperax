@@ -59,7 +59,10 @@ func TestBeginCreatesTransaction(t *testing.T) {
 func TestCommitClearsSnapshots(t *testing.T) {
 	tm := newTestTxMgr()
 
-	txID, _ := tm.Begin()
+	txID, err := tm.Begin()
+	if err != nil {
+		t.Fatalf("Begin() error: %v", err)
+	}
 	path := writeTempFile(t, "original content\n")
 
 	if err := tm.SnapshotFile(txID, path); err != nil {
@@ -82,7 +85,10 @@ func TestRollbackRestoresFiles(t *testing.T) {
 	original := "line one\nline two\nline three\n"
 	path := writeTempFile(t, original)
 
-	txID, _ := tm.Begin()
+	txID, err := tm.Begin()
+	if err != nil {
+		t.Fatalf("Begin() error: %v", err)
+	}
 	if err := tm.SnapshotFile(txID, path); err != nil {
 		t.Fatalf("SnapshotFile() error: %v", err)
 	}
@@ -108,7 +114,10 @@ func TestRollbackRestoresFiles(t *testing.T) {
 
 func TestSnapshotCapturesFileContent(t *testing.T) {
 	tm := newTestTxMgr()
-	txID, _ := tm.Begin()
+	txID, err := tm.Begin()
+	if err != nil {
+		t.Fatalf("Begin() error: %v", err)
+	}
 
 	content := "func main() {\n\tfmt.Println(\"hello\")\n}\n"
 	path := writeTempFile(t, content)
@@ -117,7 +126,10 @@ func TestSnapshotCapturesFileContent(t *testing.T) {
 		t.Fatalf("SnapshotFile() error: %v", err)
 	}
 
-	tx, _ := tm.Get(txID)
+	tx, err := tm.Get(txID)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
 	tx.mu.Lock()
 	snap, ok := tx.Snapshots[path]
 	tx.mu.Unlock()
@@ -141,7 +153,10 @@ func TestGetUnknownTransactionReturnsError(t *testing.T) {
 
 func TestDoubleSnapshotDoesNotOverwrite(t *testing.T) {
 	tm := newTestTxMgr()
-	txID, _ := tm.Begin()
+	txID, err := tm.Begin()
+	if err != nil {
+		t.Fatalf("Begin() error: %v", err)
+	}
 
 	original := "original content\n"
 	path := writeTempFile(t, original)
@@ -160,7 +175,10 @@ func TestDoubleSnapshotDoesNotOverwrite(t *testing.T) {
 	}
 
 	// The snapshot should still hold the original content.
-	tx, _ := tm.Get(txID)
+	tx, err := tm.Get(txID)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
 	tx.mu.Lock()
 	snap := tx.Snapshots[path]
 	tx.mu.Unlock()
@@ -172,9 +190,12 @@ func TestDoubleSnapshotDoesNotOverwrite(t *testing.T) {
 
 func TestSnapshotNonexistentFileReturnsError(t *testing.T) {
 	tm := newTestTxMgr()
-	txID, _ := tm.Begin()
+	txID, err := tm.Begin()
+	if err != nil {
+		t.Fatalf("Begin() error: %v", err)
+	}
 
-	err := tm.SnapshotFile(txID, filepath.Join(t.TempDir(), "does-not-exist.go"))
+	err = tm.SnapshotFile(txID, filepath.Join(t.TempDir(), "does-not-exist.go"))
 	if err == nil {
 		t.Error("SnapshotFile() on nonexistent file should return error, got nil")
 	}
@@ -198,14 +219,20 @@ func TestRollbackUnknownTransactionReturnsError(t *testing.T) {
 
 func TestMarkModified(t *testing.T) {
 	tm := newTestTxMgr()
-	txID, _ := tm.Begin()
+	txID, err := tm.Begin()
+	if err != nil {
+		t.Fatalf("Begin() error: %v", err)
+	}
 
 	path := "/some/file.go"
 	if err := tm.MarkModified(txID, path); err != nil {
 		t.Fatalf("MarkModified() error: %v", err)
 	}
 
-	tx, _ := tm.Get(txID)
+	tx, err := tm.Get(txID)
+	if err != nil {
+		t.Fatalf("Get() error: %v", err)
+	}
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/hyperax/hyperax/internal/guard"
@@ -245,7 +244,7 @@ func (h *GovernanceHandler) getActionHistory(_ context.Context, params json.RawM
 		Limit int `json:"limit"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil {
-		slog.Error("failed to unmarshal guard history params", "error", err)
+		return nil, fmt.Errorf("handlers.GovernanceHandler.getActionHistory: %w", err)
 	}
 	if p.Limit <= 0 {
 		p.Limit = 50

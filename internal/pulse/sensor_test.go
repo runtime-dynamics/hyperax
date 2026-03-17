@@ -88,8 +88,12 @@ func TestSensorManager_ListSensors(t *testing.T) {
 	}
 
 	// Create two sensors.
-	_, _ = sm.CreateSensor("s1", "*/5 * * * *", types.SensorAction{Type: "shell", Command: "echo ok"}, nil, types.SensorEventConfig{EventType: "e1"})
-	_, _ = sm.CreateSensor("s2", "*/10 * * * *", types.SensorAction{Type: "shell", Command: "echo ok"}, nil, types.SensorEventConfig{EventType: "e2"})
+	if _, err := sm.CreateSensor("s1", "*/5 * * * *", types.SensorAction{Type: "shell", Command: "echo ok"}, nil, types.SensorEventConfig{EventType: "e1"}); err != nil {
+		t.Fatalf("CreateSensor s1: %v", err)
+	}
+	if _, err := sm.CreateSensor("s2", "*/10 * * * *", types.SensorAction{Type: "shell", Command: "echo ok"}, nil, types.SensorEventConfig{EventType: "e2"}); err != nil {
+		t.Fatalf("CreateSensor s2: %v", err)
+	}
 
 	if list := sm.ListSensors(); len(list) != 2 {
 		t.Errorf("expected 2 sensors, got %d", len(list))
@@ -99,7 +103,10 @@ func TestSensorManager_ListSensors(t *testing.T) {
 func TestSensorManager_DeleteSensor(t *testing.T) {
 	sm, _ := newTestSensorManager()
 
-	sensor, _ := sm.CreateSensor("to-delete", "*/5 * * * *", types.SensorAction{Type: "shell", Command: "echo ok"}, nil, types.SensorEventConfig{EventType: "e"})
+	sensor, err := sm.CreateSensor("to-delete", "*/5 * * * *", types.SensorAction{Type: "shell", Command: "echo ok"}, nil, types.SensorEventConfig{EventType: "e"})
+	if err != nil {
+		t.Fatalf("CreateSensor: %v", err)
+	}
 
 	if err := sm.DeleteSensor(sensor.ID); err != nil {
 		t.Fatalf("unexpected delete error: %v", err)
@@ -117,14 +124,20 @@ func TestSensorManager_DeleteSensor(t *testing.T) {
 func TestSensorManager_UpdateSensor(t *testing.T) {
 	sm, _ := newTestSensorManager()
 
-	sensor, _ := sm.CreateSensor("original", "*/5 * * * *", types.SensorAction{Type: "shell", Command: "echo ok"}, nil, types.SensorEventConfig{EventType: "e"})
+	sensor, err := sm.CreateSensor("original", "*/5 * * * *", types.SensorAction{Type: "shell", Command: "echo ok"}, nil, types.SensorEventConfig{EventType: "e"})
+	if err != nil {
+		t.Fatalf("CreateSensor: %v", err)
+	}
 
-	err := sm.UpdateSensor(sensor.ID, "renamed", "*/10 * * * *", nil, nil, nil)
+	err = sm.UpdateSensor(sensor.ID, "renamed", "*/10 * * * *", nil, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected update error: %v", err)
 	}
 
-	updated, _ := sm.GetSensor(sensor.ID)
+	updated, err := sm.GetSensor(sensor.ID)
+	if err != nil {
+		t.Fatalf("GetSensor: %v", err)
+	}
 	if updated.Name != "renamed" {
 		t.Errorf("expected name 'renamed', got %q", updated.Name)
 	}
@@ -136,10 +149,12 @@ func TestSensorManager_UpdateSensor(t *testing.T) {
 func TestSensorManager_HTTPExecution(t *testing.T) {
 	// Set up a test HTTP server.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		if err := json.NewEncoder(w).Encode(map[string]any{
 			"status": "healthy",
 			"count":  42,
-		})
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	defer server.Close()
 
@@ -149,7 +164,7 @@ func TestSensorManager_HTTPExecution(t *testing.T) {
 	sub := bus.SubscribeTypes("sensor-watcher", types.EventSensorMatch)
 	defer bus.Unsubscribe("sensor-watcher")
 
-	sensor, _ := sm.CreateSensor(
+	sensor, err := sm.CreateSensor(
 		"http-test",
 		"@every 1s",
 		types.SensorAction{Type: "http", URL: server.URL, Method: "GET"},
@@ -159,6 +174,9 @@ func TestSensorManager_HTTPExecution(t *testing.T) {
 		},
 		types.SensorEventConfig{EventType: "test.health.ok"},
 	)
+	if err != nil {
+		t.Fatalf("CreateSensor: %v", err)
+	}
 
 	// Force immediate execution.
 	sm.mu.Lock()
@@ -180,7 +198,10 @@ func TestSensorManager_HTTPExecution(t *testing.T) {
 	}
 
 	// Verify last result was stored.
-	updated, _ := sm.GetSensor(sensor.ID)
+	updated, err := sm.GetSensor(sensor.ID)
+	if err != nil {
+		t.Fatalf("GetSensor: %v", err)
+	}
 	if !updated.LastMatched {
 		t.Error("expected LastMatched to be true")
 	}
@@ -192,7 +213,7 @@ func TestSensorManager_HTTPExecution(t *testing.T) {
 func TestSensorManager_ShellExecution(t *testing.T) {
 	sm, _ := newTestSensorManager()
 
-	sensor, _ := sm.CreateSensor(
+	sensor, err := sm.CreateSensor(
 		"shell-test",
 		"@every 1s",
 		types.SensorAction{Type: "shell", Command: `echo '{"status":"ok"}'`},
@@ -201,6 +222,9 @@ func TestSensorManager_ShellExecution(t *testing.T) {
 		},
 		types.SensorEventConfig{EventType: "shell.check.ok"},
 	)
+	if err != nil {
+		t.Fatalf("CreateSensor: %v", err)
+	}
 
 	// Force immediate execution.
 	sm.mu.Lock()
@@ -211,7 +235,10 @@ func TestSensorManager_ShellExecution(t *testing.T) {
 
 	sm.Tick(context.Background())
 
-	updated, _ := sm.GetSensor(sensor.ID)
+	updated, err := sm.GetSensor(sensor.ID)
+	if err != nil {
+		t.Fatalf("GetSensor: %v", err)
+	}
 	if !updated.LastMatched {
 		t.Error("expected LastMatched to be true for shell sensor")
 	}
@@ -219,13 +246,15 @@ func TestSensorManager_ShellExecution(t *testing.T) {
 
 func TestSensorManager_NoMatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"status": "unhealthy"})
+		if err := json.NewEncoder(w).Encode(map[string]any{"status": "unhealthy"}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	defer server.Close()
 
 	sm, _ := newTestSensorManager()
 
-	sensor, _ := sm.CreateSensor(
+	sensor, err := sm.CreateSensor(
 		"no-match",
 		"@every 1s",
 		types.SensorAction{Type: "http", URL: server.URL},
@@ -234,6 +263,9 @@ func TestSensorManager_NoMatch(t *testing.T) {
 		},
 		types.SensorEventConfig{EventType: "test.healthy"},
 	)
+	if err != nil {
+		t.Fatalf("CreateSensor: %v", err)
+	}
 
 	sm.mu.Lock()
 	past := time.Now().Add(-time.Minute)
@@ -242,7 +274,10 @@ func TestSensorManager_NoMatch(t *testing.T) {
 
 	sm.Tick(context.Background())
 
-	updated, _ := sm.GetSensor(sensor.ID)
+	updated, err := sm.GetSensor(sensor.ID)
+	if err != nil {
+		t.Fatalf("GetSensor: %v", err)
+	}
 	if updated.LastMatched {
 		t.Error("expected LastMatched to be false when criteria don't match")
 	}
@@ -254,7 +289,9 @@ func TestSensorManager_SecretResolution(t *testing.T) {
 	var receivedAuth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedAuth = r.Header.Get("Authorization")
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		if err := json.NewEncoder(w).Encode(map[string]any{"ok": true}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	defer server.Close()
 
@@ -265,7 +302,7 @@ func TestSensorManager_SecretResolution(t *testing.T) {
 		return "", nil
 	})
 
-	sensor, _ := sm.CreateSensor(
+	sensor, err := sm.CreateSensor(
 		"auth-test",
 		"@every 1s",
 		types.SensorAction{
@@ -279,6 +316,9 @@ func TestSensorManager_SecretResolution(t *testing.T) {
 		nil,
 		types.SensorEventConfig{EventType: "test.auth"},
 	)
+	if err != nil {
+		t.Fatalf("CreateSensor: %v", err)
+	}
 
 	sm.mu.Lock()
 	past := time.Now().Add(-time.Minute)

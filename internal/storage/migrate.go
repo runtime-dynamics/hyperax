@@ -126,7 +126,10 @@ func (m *Migrator) History(ctx context.Context) ([]MigrationRecord, error) {
 		if err := rows.Scan(&r.Version, &r.Name, &appliedAt); err != nil {
 			return nil, fmt.Errorf("storage.Migrator.History: %w", err)
 		}
-		r.AppliedAt, _ = time.Parse(time.RFC3339, appliedAt)
+		r.AppliedAt, err = time.Parse(time.RFC3339, appliedAt)
+		if err != nil {
+			return nil, fmt.Errorf("storage.Migrator.History: parse applied_at %q: %w", appliedAt, err)
+		}
 		records = append(records, r)
 	}
 	if err := rows.Err(); err != nil {

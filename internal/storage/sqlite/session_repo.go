@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/pkg/types"
@@ -51,7 +50,9 @@ func (r *SessionRepo) GetActiveSession(ctx context.Context, agentName, peerID st
 		return nil, fmt.Errorf("sqlite.SessionRepo.GetActiveSession: %w", err)
 	}
 
-	s.StartedAt, _ = time.Parse("2006-01-02 15:04:05", startedAt)
+	if s.StartedAt, err = parseSQLiteTime(startedAt, "sqlite.SessionRepo.GetActiveSession"); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -154,13 +155,22 @@ func (r *SessionRepo) ListSessions(ctx context.Context, agentName, peerID string
 			return nil, fmt.Errorf("sqlite.SessionRepo.ListSessions: %w", err)
 		}
 
-		s.StartedAt, _ = time.Parse("2006-01-02 15:04:05", startedAt)
+		var parseErr error
+		if s.StartedAt, parseErr = parseSQLiteTime(startedAt, "sqlite.SessionRepo.ListSessions"); parseErr != nil {
+			return nil, parseErr
+		}
 		if endedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", endedAt.String)
+			t, endedErr := parseSQLiteTime(endedAt.String, "sqlite.SessionRepo.ListSessions.endedAt")
+			if endedErr != nil {
+				return nil, endedErr
+			}
 			s.EndedAt = &t
 		}
 		if archivedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", archivedAt.String)
+			t, archiveErr := parseSQLiteTime(archivedAt.String, "sqlite.SessionRepo.ListSessions.archivedAt")
+			if archiveErr != nil {
+				return nil, archiveErr
+			}
 			s.ArchivedAt = &t
 		}
 

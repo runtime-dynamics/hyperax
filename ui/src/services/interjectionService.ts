@@ -61,7 +61,7 @@ export interface PullAndonCordResult {
 
 export interface ResolveInterjectionArgs {
   id: string
-  action: string
+  resolution_action: string
   resolution: string
 }
 

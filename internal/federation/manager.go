@@ -251,7 +251,9 @@ func (m *Manager) DisconnectAll() {
 	m.mu.Unlock()
 
 	for _, id := range ids {
-		_ = m.Disconnect(id)
+		if err := m.Disconnect(id); err != nil {
+			m.logger.Error("federation: failed to disconnect during shutdown", "id", id, "error", err)
+		}
 	}
 }
 

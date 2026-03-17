@@ -195,7 +195,9 @@ func (s *JSONLSink) rotateLocked() {
 		return
 	}
 
-	_ = s.file.Close()
+	if err := s.file.Close(); err != nil {
+		s.logger.Error("audit-sink: failed to close file before rotation", "error", err)
+	}
 
 	rotatedName := fmt.Sprintf("%s.%s.jsonl",
 		s.filePath,

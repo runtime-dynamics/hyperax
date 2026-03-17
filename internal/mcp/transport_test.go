@@ -30,7 +30,10 @@ func setupTransport(t *testing.T) *SSETransport {
 
 func postJSON(t *testing.T, handler http.HandlerFunc, body any) *httptest.ResponseRecorder {
 	t.Helper()
-	data, _ := json.Marshal(body)
+	data, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal request body: %v", err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewReader(data))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
@@ -112,10 +115,13 @@ func TestStreamableHTTP_ToolsList(t *testing.T) {
 func TestStreamableHTTP_ToolsCall(t *testing.T) {
 	transport := setupTransport(t)
 
-	params, _ := json.Marshal(map[string]any{
+	params, err := json.Marshal(map[string]any{
 		"name":      "ping",
 		"arguments": json.RawMessage(`{}`),
 	})
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
 
 	rr := postJSON(t, transport.HandleStreamableHTTP, JSONRPCRequest{
 		JSONRPC: "2.0",
@@ -149,10 +155,13 @@ func TestStreamableHTTP_ToolsCall(t *testing.T) {
 func TestStreamableHTTP_ToolsCall_UnknownTool(t *testing.T) {
 	transport := setupTransport(t)
 
-	params, _ := json.Marshal(map[string]any{
+	params, err := json.Marshal(map[string]any{
 		"name":      "nonexistent",
 		"arguments": json.RawMessage(`{}`),
 	})
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
 
 	rr := postJSON(t, transport.HandleStreamableHTTP, JSONRPCRequest{
 		JSONRPC: "2.0",

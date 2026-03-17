@@ -142,7 +142,9 @@ func (a *WebhookAdapter) Send(ctx context.Context, mail *types.AgentMail) error 
 		return fmt.Errorf("adapters.WebhookAdapter.Send: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	io.Copy(io.Discard, resp.Body) //nolint:errcheck
+	if _, drainErr := io.Copy(io.Discard, resp.Body); drainErr != nil {
+		a.logger.Debug("failed to drain webhook response body", "error", drainErr)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/internal/repo"
@@ -237,8 +236,12 @@ func (r *ProviderRepo) scanOne(ctx context.Context, query string, args ...any) (
 
 	p.IsDefault = isDefault == 1
 	p.IsEnabled = isEnabled == 1
-	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if p.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.ProviderRepo.scanOne"); err != nil {
+		return nil, err
+	}
+	if p.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.ProviderRepo.scanOne"); err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }
@@ -264,8 +267,12 @@ func scanProvider(row scanner) (*repo.Provider, error) {
 
 	p.IsDefault = isDefault == 1
 	p.IsEnabled = isEnabled == 1
-	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if p.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.scanProvider"); err != nil {
+		return nil, err
+	}
+	if p.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.scanProvider"); err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }

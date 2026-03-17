@@ -865,7 +865,10 @@ func (h *CommHandler) ackMail(ctx context.Context, params json.RawMessage) (*typ
 	}
 
 	if h.ackTracker != nil {
-		_ = h.ackTracker.Acknowledge(ack)
+		if err := h.ackTracker.Acknowledge(ack); err != nil {
+			h.logger.Warn("failed to track mail acknowledgment",
+				"mail_id", args.MailID, "instance_id", args.InstanceID, "error", err)
+		}
 	}
 
 	h.logger.Info("mail acknowledged via MCP",

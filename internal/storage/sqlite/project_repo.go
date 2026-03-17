@@ -58,8 +58,12 @@ func (r *ProjectRepo) GetProjectPlan(ctx context.Context, id string) (*repo.Proj
 	}
 
 	plan.Description = description.String
-	plan.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	plan.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if plan.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.ProjectRepo.GetProjectPlan"); err != nil {
+		return nil, err
+	}
+	if plan.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.ProjectRepo.GetProjectPlan"); err != nil {
+		return nil, err
+	}
 	return plan, nil
 }
 
@@ -84,8 +88,13 @@ func (r *ProjectRepo) ListProjectPlans(ctx context.Context, workspaceName string
 			return nil, fmt.Errorf("sqlite.ProjectRepo.ListProjectPlans: %w", err)
 		}
 		plan.Description = description.String
-		plan.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		plan.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		var parseErr error
+		if plan.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.ProjectRepo.ListProjectPlans"); parseErr != nil {
+			return nil, parseErr
+		}
+		if plan.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.ProjectRepo.ListProjectPlans"); parseErr != nil {
+			return nil, parseErr
+		}
 		plans = append(plans, plan)
 	}
 	if err := rows.Err(); err != nil {
@@ -341,8 +350,12 @@ func (r *ProjectRepo) GetTask(ctx context.Context, id string) (*repo.Task, error
 
 	task.Description = description.String
 	task.AssigneeAgentID = assigneeID.String
-	task.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	task.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if task.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.ProjectRepo.GetTask"); err != nil {
+		return nil, err
+	}
+	if task.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.ProjectRepo.GetTask"); err != nil {
+		return nil, err
+	}
 	return task, nil
 }
 
@@ -387,8 +400,13 @@ func (r *ProjectRepo) ListTasks(ctx context.Context, milestoneID string) ([]*rep
 		}
 		task.Description = description.String
 		task.AssigneeAgentID = assigneeID.String
-		task.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		task.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		var parseErr error
+		if task.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.ProjectRepo.ListTasks"); parseErr != nil {
+			return nil, parseErr
+		}
+		if task.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.ProjectRepo.ListTasks"); parseErr != nil {
+			return nil, parseErr
+		}
 		tasks = append(tasks, task)
 	}
 	if err := rows.Err(); err != nil {
@@ -430,8 +448,13 @@ func (r *ProjectRepo) ListTasksByWorkspace(ctx context.Context, workspaceName st
 		}
 		task.Description = description.String
 		task.AssigneeAgentID = assigneeID.String
-		task.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		task.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		var parseErr error
+		if task.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.ProjectRepo.ListTasksByWorkspace"); parseErr != nil {
+			return nil, parseErr
+		}
+		if task.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.ProjectRepo.ListTasksByWorkspace"); parseErr != nil {
+			return nil, parseErr
+		}
 		tasks = append(tasks, task)
 	}
 	if err := rows.Err(); err != nil {
@@ -521,7 +544,10 @@ func (r *ProjectRepo) PurgeOrphans(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("sqlite.ProjectRepo.PurgeOrphans(tasks): %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("sqlite.ProjectRepo.PurgeOrphans(tasks): %w", err)
+	}
 	total += n
 
 	// Delete orphaned milestones (their projects don't exist).
@@ -530,7 +556,10 @@ func (r *ProjectRepo) PurgeOrphans(ctx context.Context) (int64, error) {
 	if err != nil {
 		return total, fmt.Errorf("sqlite.ProjectRepo.PurgeOrphans(milestones): %w", err)
 	}
-	n, _ = res.RowsAffected()
+	n, err = res.RowsAffected()
+	if err != nil {
+		return total, fmt.Errorf("sqlite.ProjectRepo.PurgeOrphans(milestones): %w", err)
+	}
 	total += n
 
 	// Delete orphaned comments (their entities don't exist).
@@ -542,7 +571,10 @@ func (r *ProjectRepo) PurgeOrphans(ctx context.Context) (int64, error) {
 	if err != nil {
 		return total, fmt.Errorf("sqlite.ProjectRepo.PurgeOrphans(comments): %w", err)
 	}
-	n, _ = res.RowsAffected()
+	n, err = res.RowsAffected()
+	if err != nil {
+		return total, fmt.Errorf("sqlite.ProjectRepo.PurgeOrphans(comments): %w", err)
+	}
 	total += n
 
 	return total, nil
@@ -562,7 +594,10 @@ func (r *ProjectRepo) ReconcileCompletionStatus(ctx context.Context) (int, int, 
 	if err != nil {
 		return 0, 0, fmt.Errorf("sqlite.ProjectRepo.ReconcileCompletionStatus(milestones): %w", err)
 	}
-	msCount, _ := msResult.RowsAffected()
+	msCount, err := msResult.RowsAffected()
+	if err != nil {
+		return 0, 0, fmt.Errorf("sqlite.ProjectRepo.ReconcileCompletionStatus(milestones): %w", err)
+	}
 
 	// Step 2: auto-complete projects where every milestone is completed.
 	pjResult, err := r.db.ExecContext(ctx, `
@@ -573,7 +608,10 @@ func (r *ProjectRepo) ReconcileCompletionStatus(ctx context.Context) (int, int, 
 	if err != nil {
 		return int(msCount), 0, fmt.Errorf("sqlite.ProjectRepo.ReconcileCompletionStatus(projects): %w", err)
 	}
-	pjCount, _ := pjResult.RowsAffected()
+	pjCount, err := pjResult.RowsAffected()
+	if err != nil {
+		return int(msCount), 0, fmt.Errorf("sqlite.ProjectRepo.ReconcileCompletionStatus(projects): %w", err)
+	}
 
 	return int(msCount), int(pjCount), nil
 }
@@ -615,8 +653,13 @@ func (r *ProjectRepo) ListTasksByAgent(ctx context.Context, agentID string, stat
 		}
 		task.Description = description.String
 		task.AssigneeAgentID = assigneeID.String
-		task.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		task.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		var parseErr error
+		if task.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.ProjectRepo.ListTasksByAgent"); parseErr != nil {
+			return nil, parseErr
+		}
+		if task.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.ProjectRepo.ListTasksByAgent"); parseErr != nil {
+			return nil, parseErr
+		}
 		tasks = append(tasks, task)
 	}
 	if err := rows.Err(); err != nil {
@@ -683,8 +726,12 @@ func (r *ProjectRepo) GetNextTask(ctx context.Context, agentID string) (*repo.Ta
 
 	task.Description = description.String
 	task.AssigneeAgentID = assigneeID.String
-	task.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	task.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if task.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.ProjectRepo.GetNextTask"); err != nil {
+		return nil, err
+	}
+	if task.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.ProjectRepo.GetNextTask"); err != nil {
+		return nil, err
+	}
 	return task, nil
 }
 
@@ -724,7 +771,10 @@ func (r *ProjectRepo) ListComments(ctx context.Context, entityType, entityID str
 		if err := rows.Scan(&c.ID, &c.EntityType, &c.EntityID, &c.Content, &c.Author, &createdAt); err != nil {
 			return nil, fmt.Errorf("sqlite.ProjectRepo.ListComments: %w", err)
 		}
-		c.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var parseErr error
+		if c.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.ProjectRepo.ListComments"); parseErr != nil {
+			return nil, parseErr
+		}
 		comments = append(comments, c)
 	}
 	if err := rows.Err(); err != nil {

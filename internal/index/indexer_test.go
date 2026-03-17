@@ -376,8 +376,14 @@ func TestHashFile_DifferentContent(t *testing.T) {
 		t.Fatalf("write b: %v", err)
 	}
 
-	hash1, _ := HashFile(path1)
-	hash2, _ := HashFile(path2)
+	hash1, err := HashFile(path1)
+	if err != nil {
+		t.Fatalf("hash file 1: %v", err)
+	}
+	hash2, err := HashFile(path2)
+	if err != nil {
+		t.Fatalf("hash file 2: %v", err)
+	}
 
 	if hash1 == hash2 {
 		t.Error("different files should produce different hashes")

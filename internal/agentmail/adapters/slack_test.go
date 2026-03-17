@@ -108,8 +108,10 @@ func TestSlackAdapter_Send(t *testing.T) {
 		BotTokenRef:      "secret:slack_token",
 		DefaultChannelID: "C999",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	mail := &types.AgentMail{
 		ID:       "slack-send-001",
@@ -151,8 +153,10 @@ func TestSlackAdapter_Send_APIError(t *testing.T) {
 		BotTokenRef:      "secret:slack_token",
 		DefaultChannelID: "C_BAD",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	err := a.Send(context.Background(), &types.AgentMail{
 		ID: "err", From: "a", To: "b", Priority: types.MailPriorityStandard, SentAt: time.Now(),
@@ -195,8 +199,10 @@ func TestSlackAdapter_Receive(t *testing.T) {
 		BotTokenRef:      "secret:slack_token",
 		DefaultChannelID: "C123",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	msgs, err := a.Receive(context.Background())
 	if err != nil {
@@ -233,8 +239,10 @@ func TestSlackAdapter_Receive_Empty(t *testing.T) {
 		BotTokenRef:      "secret:slack_token",
 		DefaultChannelID: "C123",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	msgs, err := a.Receive(context.Background())
 	if err != nil {

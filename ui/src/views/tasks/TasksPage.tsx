@@ -191,7 +191,7 @@ function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogProps) {
     }
     setNameError('')
     const args: CreateProjectArgs = {
-      workspace_name: 'hyperax',
+      workspace_name: '_org',
       name: name.trim(),
       priority,
     }
@@ -212,7 +212,7 @@ function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogProps) {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Create Project</DialogTitle>
-          <DialogDescription>Create a new project plan in the hyperax workspace.</DialogDescription>
+          <DialogDescription>Create a new project plan in the workspace.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
@@ -1778,7 +1778,7 @@ export function TasksPage() {
   const { data: projects, isLoading: isLoadingProjects, error: projectsError, refetch: refetchProjects } = useProjects()
   const { data: projectDetails, isLoading: isLoadingDetails } = useProjectDetails(selectedProjectId)
   // Fetch all tasks directly from the workspace for the "All Projects" view
-  const { data: workspaceTasks } = useTasks('hyperax')
+  const { data: workspaceTasks } = useTasks('_org')
   // Agent name lookup for resolving assignee UUIDs to display names
   const { data: agentList } = useAgents()
   const { mutate: archiveProject } = useArchiveProject()
@@ -1993,7 +1993,7 @@ export function TasksPage() {
       {/* Page Header */}
       <PageHeader
         title="Tasks"
-        description="Manage projects, milestones, and tasks across the hyperax workspace."
+        description="Manage projects, milestones, and tasks across all workspaces."
       >
         <Button size="sm" onClick={() => setCreateProjectOpen(true)}>
           <PlusCircle className="h-4 w-4 mr-2" />

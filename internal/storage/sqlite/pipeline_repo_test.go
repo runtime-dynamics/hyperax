@@ -90,10 +90,13 @@ func TestPipelineRepo_ListPipelines(t *testing.T) {
 func TestPipelineRepo_CreateJobAndGet(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "build", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
 
 	jobID, err := r.CreateJob(ctx, pipelineID, "ws1")
 	if err != nil {
@@ -131,17 +134,26 @@ func TestPipelineRepo_GetJobNotFound(t *testing.T) {
 func TestPipelineRepo_UpdateJobStatus(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "deploy", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
-	jobID, _ := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
+	jobID, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	// Transition to running
 	if err := r.UpdateJobStatus(ctx, jobID, "running", ""); err != nil {
 		t.Fatalf("update to running: %v", err)
 	}
-	job, _ := r.GetJob(ctx, jobID)
+	job, err := r.GetJob(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
 	if job.Status != "running" {
 		t.Errorf("status = %q, want %q", job.Status, "running")
 	}
@@ -150,7 +162,10 @@ func TestPipelineRepo_UpdateJobStatus(t *testing.T) {
 	if err := r.UpdateJobStatus(ctx, jobID, "completed", "all passed"); err != nil {
 		t.Fatalf("update to completed: %v", err)
 	}
-	job, _ = r.GetJob(ctx, jobID)
+	job, err = r.GetJob(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
 	if job.Status != "completed" {
 		t.Errorf("status = %q, want %q", job.Status, "completed")
 	}
@@ -174,13 +189,20 @@ func TestPipelineRepo_UpdateJobStatus_NotFound(t *testing.T) {
 func TestPipelineRepo_ListJobs(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "ci", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
 
-	_, _ = r.CreateJob(ctx, pipelineID, "ws1")
-	_, _ = r.CreateJob(ctx, pipelineID, "ws1")
+	if _, err := r.CreateJob(ctx, pipelineID, "ws1"); err != nil {
+		t.Fatalf("create job 1: %v", err)
+	}
+	if _, err := r.CreateJob(ctx, pipelineID, "ws1"); err != nil {
+		t.Fatalf("create job 2: %v", err)
+	}
 
 	jobs, err := r.ListJobs(ctx, pipelineID)
 	if err != nil {
@@ -194,11 +216,17 @@ func TestPipelineRepo_ListJobs(t *testing.T) {
 func TestPipelineRepo_StepResults(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "ci", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
-	jobID, _ := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
+	jobID, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	exitCode := 0
 	sr := &repo.StepResult{
@@ -231,7 +259,9 @@ func TestPipelineRepo_StepResults(t *testing.T) {
 		OutputLog:  "FAIL: TestFoo",
 		Error:      "test failed",
 	}
-	_, _ = r.CreateStepResult(ctx, sr2)
+	if _, err := r.CreateStepResult(ctx, sr2); err != nil {
+		t.Fatalf("create step result 2: %v", err)
+	}
 
 	results, err := r.ListStepResults(ctx, jobID)
 	if err != nil {
@@ -265,11 +295,17 @@ func TestPipelineRepo_StepResults(t *testing.T) {
 func TestPipelineRepo_ListStepResults_Empty(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "ci", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
-	jobID, _ := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
+	jobID, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	results, err := r.ListStepResults(ctx, jobID)
 	if err != nil {
@@ -376,15 +412,28 @@ func TestPipelineRepo_SearchPipelines_NoMatch(t *testing.T) {
 func TestPipelineRepo_ListJobsFiltered_NoFilter(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "ci", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
 
-	job1, _ := r.CreateJob(ctx, pipelineID, "ws1")
-	job2, _ := r.CreateJob(ctx, pipelineID, "ws1")
-	_ = r.UpdateJobStatus(ctx, job1, "completed", "ok")
-	_ = r.UpdateJobStatus(ctx, job2, "failed", "err")
+	job1, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job 1: %v", err)
+	}
+	job2, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job 2: %v", err)
+	}
+	if err := r.UpdateJobStatus(ctx, job1, "completed", "ok"); err != nil {
+		t.Fatalf("update job 1: %v", err)
+	}
+	if err := r.UpdateJobStatus(ctx, job2, "failed", "err"); err != nil {
+		t.Fatalf("update job 2: %v", err)
+	}
 
 	jobs, err := r.ListJobsFiltered(ctx, pipelineID, repo.JobFilter{})
 	if err != nil {
@@ -398,15 +447,28 @@ func TestPipelineRepo_ListJobsFiltered_NoFilter(t *testing.T) {
 func TestPipelineRepo_ListJobsFiltered_ByStatus(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "ci", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
 
-	job1, _ := r.CreateJob(ctx, pipelineID, "ws1")
-	job2, _ := r.CreateJob(ctx, pipelineID, "ws1")
-	_ = r.UpdateJobStatus(ctx, job1, "completed", "ok")
-	_ = r.UpdateJobStatus(ctx, job2, "failed", "err")
+	job1, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job 1: %v", err)
+	}
+	job2, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job 2: %v", err)
+	}
+	if err := r.UpdateJobStatus(ctx, job1, "completed", "ok"); err != nil {
+		t.Fatalf("update job 1: %v", err)
+	}
+	if err := r.UpdateJobStatus(ctx, job2, "failed", "err"); err != nil {
+		t.Fatalf("update job 2: %v", err)
+	}
 
 	jobs, err := r.ListJobsFiltered(ctx, pipelineID, repo.JobFilter{Status: "completed"})
 	if err != nil {
@@ -423,14 +485,23 @@ func TestPipelineRepo_ListJobsFiltered_ByStatus(t *testing.T) {
 func TestPipelineRepo_ListJobsFiltered_WithLimit(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "ci", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
 
-	_, _ = r.CreateJob(ctx, pipelineID, "ws1")
-	_, _ = r.CreateJob(ctx, pipelineID, "ws1")
-	_, _ = r.CreateJob(ctx, pipelineID, "ws1")
+	if _, err := r.CreateJob(ctx, pipelineID, "ws1"); err != nil {
+		t.Fatalf("create job 1: %v", err)
+	}
+	if _, err := r.CreateJob(ctx, pipelineID, "ws1"); err != nil {
+		t.Fatalf("create job 2: %v", err)
+	}
+	if _, err := r.CreateJob(ctx, pipelineID, "ws1"); err != nil {
+		t.Fatalf("create job 3: %v", err)
+	}
 
 	jobs, err := r.ListJobsFiltered(ctx, pipelineID, repo.JobFilter{Limit: 2})
 	if err != nil {
@@ -444,14 +515,26 @@ func TestPipelineRepo_ListJobsFiltered_WithLimit(t *testing.T) {
 func TestPipelineRepo_ListJobsFiltered_StatusAndLimit(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "ci", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
 
-	j1, _ := r.CreateJob(ctx, pipelineID, "ws1")
-	j2, _ := r.CreateJob(ctx, pipelineID, "ws1")
-	j3, _ := r.CreateJob(ctx, pipelineID, "ws1")
+	j1, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job 1: %v", err)
+	}
+	j2, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job 2: %v", err)
+	}
+	j3, err := r.CreateJob(ctx, pipelineID, "ws1")
+	if err != nil {
+		t.Fatalf("create job 3: %v", err)
+	}
 	_ = r.UpdateJobStatus(ctx, j1, "completed", "ok")
 	_ = r.UpdateJobStatus(ctx, j2, "completed", "ok")
 	_ = r.UpdateJobStatus(ctx, j3, "failed", "err")
@@ -473,10 +556,13 @@ func TestPipelineRepo_ListJobsFiltered_StatusAndLimit(t *testing.T) {
 func TestPipelineRepo_CreateAndListAssignments(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pipelineID, _ := r.CreatePipeline(ctx, &repo.Pipeline{
+	pipelineID, err := r.CreatePipeline(ctx, &repo.Pipeline{
 		Name: "ci", WorkspaceName: "ws1",
 		Swimlanes: "[]", SetupCommands: "[]", Environment: "{}",
 	})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
 
 	assignment := &repo.PipelineAssignment{
 		PipelineID:  pipelineID,
@@ -514,11 +600,21 @@ func TestPipelineRepo_CreateAndListAssignments(t *testing.T) {
 func TestPipelineRepo_ListAssignments_FilterByWorkspace(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pid1, _ := r.CreatePipeline(ctx, &repo.Pipeline{Name: "a", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
-	pid2, _ := r.CreatePipeline(ctx, &repo.Pipeline{Name: "b", WorkspaceName: "ws2", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	pid1, err := r.CreatePipeline(ctx, &repo.Pipeline{Name: "a", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	if err != nil {
+		t.Fatalf("create pipeline 1: %v", err)
+	}
+	pid2, err := r.CreatePipeline(ctx, &repo.Pipeline{Name: "b", WorkspaceName: "ws2", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	if err != nil {
+		t.Fatalf("create pipeline 2: %v", err)
+	}
 
-	_, _ = r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid1, WorkspaceID: "ws1"})
-	_, _ = r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid2, WorkspaceID: "ws2"})
+	if _, err := r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid1, WorkspaceID: "ws1"}); err != nil {
+		t.Fatalf("create assignment 1: %v", err)
+	}
+	if _, err := r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid2, WorkspaceID: "ws2"}); err != nil {
+		t.Fatalf("create assignment 2: %v", err)
+	}
 
 	assignments, err := r.ListAssignments(ctx, "ws1", "")
 	if err != nil {
@@ -532,11 +628,21 @@ func TestPipelineRepo_ListAssignments_FilterByWorkspace(t *testing.T) {
 func TestPipelineRepo_ListAssignments_FilterByPipeline(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pid1, _ := r.CreatePipeline(ctx, &repo.Pipeline{Name: "a", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
-	pid2, _ := r.CreatePipeline(ctx, &repo.Pipeline{Name: "b", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	pid1, err := r.CreatePipeline(ctx, &repo.Pipeline{Name: "a", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	if err != nil {
+		t.Fatalf("create pipeline 1: %v", err)
+	}
+	pid2, err := r.CreatePipeline(ctx, &repo.Pipeline{Name: "b", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	if err != nil {
+		t.Fatalf("create pipeline 2: %v", err)
+	}
 
-	_, _ = r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid1, WorkspaceID: "ws1"})
-	_, _ = r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid2, WorkspaceID: "ws1"})
+	if _, err := r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid1, WorkspaceID: "ws1"}); err != nil {
+		t.Fatalf("create assignment 1: %v", err)
+	}
+	if _, err := r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid2, WorkspaceID: "ws1"}); err != nil {
+		t.Fatalf("create assignment 2: %v", err)
+	}
 
 	assignments, err := r.ListAssignments(ctx, "", pid1)
 	if err != nil {
@@ -550,10 +656,17 @@ func TestPipelineRepo_ListAssignments_FilterByPipeline(t *testing.T) {
 func TestPipelineRepo_ListAssignments_FilterBoth(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pid, _ := r.CreatePipeline(ctx, &repo.Pipeline{Name: "a", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	pid, err := r.CreatePipeline(ctx, &repo.Pipeline{Name: "a", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
 
-	_, _ = r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid, WorkspaceID: "ws1"})
-	_, _ = r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid, WorkspaceID: "ws2"})
+	if _, err := r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid, WorkspaceID: "ws1"}); err != nil {
+		t.Fatalf("create assignment 1: %v", err)
+	}
+	if _, err := r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid, WorkspaceID: "ws2"}); err != nil {
+		t.Fatalf("create assignment 2: %v", err)
+	}
 
 	assignments, err := r.ListAssignments(ctx, "ws1", pid)
 	if err != nil {
@@ -567,8 +680,14 @@ func TestPipelineRepo_ListAssignments_FilterBoth(t *testing.T) {
 func TestPipelineRepo_DeleteAssignment(t *testing.T) {
 	r, ctx := newPipelineRepo(t)
 
-	pid, _ := r.CreatePipeline(ctx, &repo.Pipeline{Name: "a", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
-	id, _ := r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid, WorkspaceID: "ws1"})
+	pid, err := r.CreatePipeline(ctx, &repo.Pipeline{Name: "a", WorkspaceName: "ws1", Swimlanes: "[]", SetupCommands: "[]", Environment: "{}"})
+	if err != nil {
+		t.Fatalf("create pipeline: %v", err)
+	}
+	id, err := r.CreateAssignment(ctx, &repo.PipelineAssignment{PipelineID: pid, WorkspaceID: "ws1"})
+	if err != nil {
+		t.Fatalf("create assignment: %v", err)
+	}
 
 	if err := r.DeleteAssignment(ctx, id); err != nil {
 		t.Fatalf("delete: %v", err)

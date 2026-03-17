@@ -98,7 +98,10 @@ func (r *LifecycleRepo) ListAgentStates(ctx context.Context) ([]*repo.AgentState
 		if err := rows.Scan(&a.AgentID, &a.State, &updatedAt); err != nil {
 			return nil, fmt.Errorf("sqlite.LifecycleRepo.ListAgentStates: %w", err)
 		}
-		a.UpdatedAt, _ = time.Parse(sqliteTimeFormat, updatedAt)
+		var parseErr error
+		if a.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.LifecycleRepo.ListAgentStates"); parseErr != nil {
+			return nil, parseErr
+		}
 		agents = append(agents, &a)
 	}
 	if err := rows.Err(); err != nil {

@@ -63,21 +63,25 @@ func TestRehydrator_FullRehydration(t *testing.T) {
 	}
 
 	cpRepo := newMockCheckpointRepo()
-	_ = cpRepo.Save(context.Background(), &repo.AgentCheckpoint{
+	if err := cpRepo.Save(context.Background(), &repo.AgentCheckpoint{
 		AgentID:        "agent-1",
 		TaskID:         "task-42",
 		WorkingContext: `{"key":"value"}`,
 		ActiveFiles:    `["/foo/bar.go"]`,
 		RefactorTxID:   "", // no active tx
-	})
+	}); err != nil {
+		t.Fatalf("save checkpoint: %v", err)
+	}
 
 	// Send a pending message to the agent before rehydration.
-	_ = hub.Send(context.Background(), &types.MessageEnvelope{
+	if err := hub.Send(context.Background(), &types.MessageEnvelope{
 		From:    "system",
 		To:      "agent-1",
 		Content: "pending message",
 		Trust:   types.TrustInternal,
-	})
+	}); err != nil {
+		t.Fatalf("send pending message: %v", err)
+	}
 
 	r := NewRehydrator(lifecycleRepo, cpRepo, txMgr, hub, bus, discardLogger())
 
@@ -97,7 +101,10 @@ func TestRehydrator_FullRehydration(t *testing.T) {
 	}
 
 	// Verify agent is now active.
-	state, _ := lifecycleRepo.GetState(context.Background(), "agent-1")
+	state, err := lifecycleRepo.GetState(context.Background(), "agent-1")
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
 	if state != string(StateActive) {
 		t.Errorf("expected active state, got %s", state)
 	}
@@ -129,7 +136,10 @@ func TestRehydrator_NoCheckpointFallsBackToOnboarding(t *testing.T) {
 	}
 
 	// Verify agent is now in onboarding state.
-	state, _ := lifecycleRepo.GetState(context.Background(), "agent-1")
+	state, err := lifecycleRepo.GetState(context.Background(), "agent-1")
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
 	if state != string(StateOnboarding) {
 		t.Errorf("expected onboarding state, got %s", state)
 	}
@@ -152,10 +162,12 @@ func TestRehydrator_RollsBackRefactorTx(t *testing.T) {
 	}
 
 	cpRepo := newMockCheckpointRepo()
-	_ = cpRepo.Save(context.Background(), &repo.AgentCheckpoint{
+	if err := cpRepo.Save(context.Background(), &repo.AgentCheckpoint{
 		AgentID:      "agent-1",
 		RefactorTxID: txID,
-	})
+	}); err != nil {
+		t.Fatalf("save checkpoint: %v", err)
+	}
 
 	r := NewRehydrator(lifecycleRepo, cpRepo, txMgr, hub, bus, discardLogger())
 

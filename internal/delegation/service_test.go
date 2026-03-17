@@ -158,7 +158,9 @@ func testRegistry() (*secrets.Registry, *mockSecretProvider) {
 	reg := secrets.NewRegistry()
 	mp := newMockSecretProvider()
 	reg.Register(mp)
-	_ = reg.SetActive("mock")
+	if err := reg.SetActive("mock"); err != nil {
+		panic("SetActive mock: " + err.Error())
+	}
 	return reg, mp
 }
 
@@ -274,19 +276,25 @@ func TestService_Revoke(t *testing.T) {
 	r := newMockDelegationRepo()
 	svc := testService(r, nil)
 
-	d, _ := svc.Grant(ctx, GrantRequest{
+	d, err := svc.Grant(ctx, GrantRequest{
 		GranterID:     "admin",
 		GranteeID:     "agent",
 		GrantType:     types.GrantClearanceElevation,
 		ElevatedLevel: 2,
 		Reason:        "test",
 	})
+	if err != nil {
+		t.Fatalf("grant: %v", err)
+	}
 
 	if err := svc.Revoke(ctx, d.ID); err != nil {
 		t.Fatalf("revoke: %v", err)
 	}
 
-	got, _ := svc.GetByID(ctx, d.ID)
+	got, err := svc.GetByID(ctx, d.ID)
+	if err != nil {
+		t.Fatalf("get by id: %v", err)
+	}
 	if got.RevokedAt == "" {
 		t.Fatal("expected revoked_at to be set")
 	}
@@ -298,13 +306,16 @@ func TestService_Revoke_CleansUpCredential(t *testing.T) {
 	reg, mp := testRegistry()
 	svc := testService(r, reg)
 
-	d, _ := svc.Grant(ctx, GrantRequest{
+	d, err := svc.Grant(ctx, GrantRequest{
 		GranterID:  "admin",
 		GranteeID:  "agent",
 		GrantType:  types.GrantCredentialPassthrough,
 		Credential: "secret-token",
 		Reason:     "test",
 	})
+	if err != nil {
+		t.Fatalf("grant: %v", err)
+	}
 
 	// Credential should exist.
 	if _, ok := mp.store["global/"+d.CredentialKey]; !ok {
@@ -337,13 +348,16 @@ func TestService_GetCredential(t *testing.T) {
 	reg, _ := testRegistry()
 	svc := testService(r, reg)
 
-	d, _ := svc.Grant(ctx, GrantRequest{
+	d, err := svc.Grant(ctx, GrantRequest{
 		GranterID:  "admin",
 		GranteeID:  "agent",
 		GrantType:  types.GrantCredentialPassthrough,
 		Credential: "the-secret",
 		Reason:     "test",
 	})
+	if err != nil {
+		t.Fatalf("grant: %v", err)
+	}
 
 	// Grantee can retrieve.
 	val, err := svc.GetCredential(ctx, d.ID, "agent")
@@ -370,16 +384,19 @@ func TestService_GetCredential_Unauthorized(t *testing.T) {
 	reg, _ := testRegistry()
 	svc := testService(r, reg)
 
-	d, _ := svc.Grant(ctx, GrantRequest{
+	d, err := svc.Grant(ctx, GrantRequest{
 		GranterID:  "admin",
 		GranteeID:  "agent",
 		GrantType:  types.GrantCredentialPassthrough,
 		Credential: "secret",
 		Reason:     "test",
 	})
+	if err != nil {
+		t.Fatalf("grant: %v", err)
+	}
 
-	_, err := svc.GetCredential(ctx, d.ID, "outsider")
-	if err == nil {
+	_, getErr := svc.GetCredential(ctx, d.ID, "outsider")
+	if getErr == nil {
 		t.Fatal("expected error for unauthorized requester")
 	}
 }
@@ -389,16 +406,19 @@ func TestService_GetCredential_WrongType(t *testing.T) {
 	r := newMockDelegationRepo()
 	svc := testService(r, nil)
 
-	d, _ := svc.Grant(ctx, GrantRequest{
+	d, err := svc.Grant(ctx, GrantRequest{
 		GranterID:     "admin",
 		GranteeID:     "agent",
 		GrantType:     types.GrantClearanceElevation,
 		ElevatedLevel: 2,
 		Reason:        "test",
 	})
+	if err != nil {
+		t.Fatalf("grant: %v", err)
+	}
 
-	_, err := svc.GetCredential(ctx, d.ID, "agent")
-	if err == nil {
+	_, getErr := svc.GetCredential(ctx, d.ID, "agent")
+	if getErr == nil {
 		t.Fatal("expected error for non-passthrough delegation")
 	}
 }
@@ -408,18 +428,24 @@ func TestService_ListByGrantee(t *testing.T) {
 	r := newMockDelegationRepo()
 	svc := testService(r, nil)
 
-	_, _ = svc.Grant(ctx, GrantRequest{
+	if _, err := svc.Grant(ctx, GrantRequest{
 		GranterID: "admin", GranteeID: "agent",
 		GrantType: types.GrantScopeAccess, Reason: "test",
-	})
-	_, _ = svc.Grant(ctx, GrantRequest{
+	}); err != nil {
+		t.Fatalf("grant 1: %v", err)
+	}
+	if _, err := svc.Grant(ctx, GrantRequest{
 		GranterID: "admin2", GranteeID: "agent",
 		GrantType: types.GrantClearanceElevation, ElevatedLevel: 1, Reason: "test",
-	})
-	_, _ = svc.Grant(ctx, GrantRequest{
+	}); err != nil {
+		t.Fatalf("grant 2: %v", err)
+	}
+	if _, err := svc.Grant(ctx, GrantRequest{
 		GranterID: "admin", GranteeID: "other",
 		GrantType: types.GrantScopeAccess, Reason: "test",
-	})
+	}); err != nil {
+		t.Fatalf("grant 3: %v", err)
+	}
 
 	list, err := svc.ListByGrantee(ctx, "agent")
 	if err != nil {
@@ -456,23 +482,28 @@ func TestService_GetCredential_Revoked(t *testing.T) {
 	reg, _ := testRegistry()
 	svc := testService(r, reg)
 
-	d, _ := svc.Grant(ctx, GrantRequest{
+	d, err := svc.Grant(ctx, GrantRequest{
 		GranterID:  "admin",
 		GranteeID:  "agent",
 		GrantType:  types.GrantCredentialPassthrough,
 		Credential: "secret",
 		Reason:     "test",
 	})
+	if err != nil {
+		t.Fatalf("grant: %v", err)
+	}
 
-	_ = svc.Revoke(ctx, d.ID)
+	if err := svc.Revoke(ctx, d.ID); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
 
-	_, err := svc.GetCredential(ctx, d.ID, "agent")
-	if err == nil {
+	_, getErr := svc.GetCredential(ctx, d.ID, "agent")
+	if getErr == nil {
 		t.Fatal("expected error for revoked delegation credential")
 	}
-	if !errors.Is(err, nil) {
+	if !errors.Is(getErr, nil) {
 		// Just verify error contains useful message.
-		if err.Error() == "" {
+		if getErr.Error() == "" {
 			t.Fatal("expected non-empty error")
 		}
 	}

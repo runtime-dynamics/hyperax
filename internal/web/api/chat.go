@@ -243,7 +243,11 @@ func (a *ChatAPI) sendMessage(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger async LLM completion — the user sees "delivered" immediately
 	// while the backend calls the LLM provider in the background.
-	go func() { _ = a.generateResponse(env.To, env.From, env.Content, sessionID) }()
+	go func() {
+		if err := a.generateResponse(env.To, env.From, env.Content, sessionID); err != nil {
+			a.logger.Error("async chat completion failed", "agent", env.To, "from", env.From, "error", err)
+		}
+	}()
 
 	respondJSON(w, r, http.StatusOK, map[string]string{
 		"status": "delivered",
@@ -257,7 +261,11 @@ func (a *ChatAPI) sendMessage(w http.ResponseWriter, r *http.Request) {
 // LLM completion loop, ensuring agent-to-agent messages trigger the recipient's
 // response generation. The completion runs in a separate goroutine.
 func (a *ChatAPI) TriggerCompletion(agentName, senderID, content, sessionID string) {
-	go func() { _ = a.generateResponse(agentName, senderID, content, sessionID) }()
+	go func() {
+		if err := a.generateResponse(agentName, senderID, content, sessionID); err != nil {
+			a.logger.Error("async triggered completion failed", "agent", agentName, "from", senderID, "error", err)
+		}
+	}()
 }
 
 // GenerateResponseSync performs synchronous LLM completion for an agent.
@@ -1048,9 +1056,13 @@ func (a *ChatAPI) tryDelegate(ctx context.Context, candidateName, disabledAgentN
 	// Persist the delegation message to comm log.
 	if a.commLog != nil {
 		if sessionID != "" {
-			_ = a.commLog.LogWithSession(ctx, delegEnv, "sent", sessionID)
+			if err := a.commLog.LogWithSession(ctx, delegEnv, "sent", sessionID); err != nil {
+				a.logger.Warn("failed to persist delegation message to chat history", "session", sessionID, "error", err)
+			}
 		} else {
-			_ = a.commLog.Log(ctx, delegEnv, "sent")
+			if err := a.commLog.Log(ctx, delegEnv, "sent"); err != nil {
+				a.logger.Warn("failed to persist delegation message to chat history", "candidate", candidateName, "error", err)
+			}
 		}
 	}
 
@@ -1064,7 +1076,11 @@ func (a *ChatAPI) tryDelegate(ctx context.Context, candidateName, disabledAgentN
 		"delegate", candidateName, "disabled_agent", disabledAgentName)
 
 	// Trigger the delegate's completion asynchronously.
-	go func() { _ = a.generateResponse(candidateName, senderID, delegationMsg, sessionID) }()
+	go func() {
+		if err := a.generateResponse(candidateName, senderID, delegationMsg, sessionID); err != nil {
+			a.logger.Error("async delegation completion failed", "delegate", candidateName, "from", senderID, "error", err)
+		}
+	}()
 
 	return true, nil
 }

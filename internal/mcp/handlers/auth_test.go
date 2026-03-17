@@ -126,7 +126,7 @@ func TestCreateMCPToken(t *testing.T) {
 	h, tokenRepo := newTestAuthHandler()
 	ctx := context.Background()
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"agent_id":      "p1",
 		"label":           "CI token",
 		"clearance_level": 1,
@@ -168,7 +168,7 @@ func TestCreateMCPToken_ClearanceExceedsPersona(t *testing.T) {
 	h, _ := newTestAuthHandler()
 	ctx := context.Background()
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"agent_id":      "p2", // clearance 0
 		"clearance_level": 1,    // exceeds persona clearance
 	})
@@ -186,7 +186,7 @@ func TestCreateMCPToken_PersonaNotFound(t *testing.T) {
 	h, _ := newTestAuthHandler()
 	ctx := context.Background()
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"agent_id": "nonexistent",
 	})
 
@@ -211,7 +211,7 @@ func TestCreateMCPToken_CrossPersonaClearanceCheck(t *testing.T) {
 	}
 	ctx := context.WithValue(context.Background(), mcp.AuthContextKey(), ac)
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"agent_id": "p1",
 	})
 
@@ -236,7 +236,7 @@ func TestRevokeMCPToken(t *testing.T) {
 		Scopes:    []string{},
 	})
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"token_id": "tok-to-revoke",
 	})
 
@@ -264,7 +264,7 @@ func TestListMCPTokens(t *testing.T) {
 		&types.MCPToken{ID: "tok3", AgentID: "p2", Label: "other", Scopes: []string{}},
 	)
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"agent_id": "p1",
 	})
 
@@ -299,7 +299,7 @@ func TestRotateMCPToken(t *testing.T) {
 		Scopes:         []string{"read"},
 	})
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"token_id": "tok-old",
 	})
 

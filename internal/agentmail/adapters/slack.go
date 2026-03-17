@@ -227,12 +227,16 @@ func (a *SlackAdapter) Receive(ctx context.Context) ([]*types.AgentMail, error) 
 			continue
 		}
 
-		payload, _ := json.Marshal(map[string]string{
+		payload, marshalErr := json.Marshal(map[string]string{
 			"text":    msg.Text,
 			"user":    msg.User,
 			"ts":      msg.TS,
 			"channel": a.config.DefaultChannelID,
 		})
+		if marshalErr != nil {
+			a.logger.Warn("failed to marshal slack message payload", "ts", msg.TS, "error", marshalErr)
+			continue
+		}
 
 		mail := &types.AgentMail{
 			ID:          fmt.Sprintf("slack-%s-%s", a.config.DefaultChannelID, msg.TS),

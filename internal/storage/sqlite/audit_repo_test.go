@@ -86,9 +86,12 @@ func TestAuditRepo_ListAudits_FiltersByWorkspace(t *testing.T) {
 func TestAuditRepo_GetAuditItems(t *testing.T) {
 	r, ctx := newAuditRepo(t)
 
-	auditID, _ := r.CreateAudit(ctx, &repo.Audit{
+	auditID, err := r.CreateAudit(ctx, &repo.Audit{
 		Name: "review", WorkspaceName: "ws1", Status: "pending", AuditType: "code",
 	})
+	if err != nil {
+		t.Fatalf("create audit: %v", err)
+	}
 
 	insertAuditItem(t, r, ctx, auditID, "function", "main.go", "main", "pending")
 	insertAuditItem(t, r, ctx, auditID, "function", "handler.go", "ServeHTTP", "pass")
@@ -105,9 +108,12 @@ func TestAuditRepo_GetAuditItems(t *testing.T) {
 func TestAuditRepo_UpdateAuditItem(t *testing.T) {
 	r, ctx := newAuditRepo(t)
 
-	auditID, _ := r.CreateAudit(ctx, &repo.Audit{
+	auditID, err := r.CreateAudit(ctx, &repo.Audit{
 		Name: "review", WorkspaceName: "ws1", Status: "pending", AuditType: "code",
 	})
+	if err != nil {
+		t.Fatalf("create audit: %v", err)
+	}
 
 	itemID := insertAuditItem(t, r, ctx, auditID, "function", "main.go", "main", "pending")
 
@@ -115,7 +121,10 @@ func TestAuditRepo_UpdateAuditItem(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 
-	items, _ := r.GetAuditItems(ctx, auditID)
+	items, err := r.GetAuditItems(ctx, auditID)
+	if err != nil {
+		t.Fatalf("get items: %v", err)
+	}
 	if len(items) != 1 {
 		t.Fatalf("expected 1 item, got %d", len(items))
 	}
@@ -144,9 +153,12 @@ func TestAuditRepo_UpdateAuditItem_NotFound(t *testing.T) {
 func TestAuditRepo_GetAuditProgress(t *testing.T) {
 	r, ctx := newAuditRepo(t)
 
-	auditID, _ := r.CreateAudit(ctx, &repo.Audit{
+	auditID, err := r.CreateAudit(ctx, &repo.Audit{
 		Name: "review", WorkspaceName: "ws1", Status: "pending", AuditType: "code",
 	})
+	if err != nil {
+		t.Fatalf("create audit: %v", err)
+	}
 
 	insertAuditItem(t, r, ctx, auditID, "function", "a.go", "FuncA", "pending")
 	insertAuditItem(t, r, ctx, auditID, "function", "b.go", "FuncB", "pass")
@@ -179,9 +191,12 @@ func TestAuditRepo_GetAuditProgress(t *testing.T) {
 func TestAuditRepo_GetAuditProgress_Empty(t *testing.T) {
 	r, ctx := newAuditRepo(t)
 
-	auditID, _ := r.CreateAudit(ctx, &repo.Audit{
+	auditID, err := r.CreateAudit(ctx, &repo.Audit{
 		Name: "empty-audit", WorkspaceName: "ws1", Status: "pending", AuditType: "code",
 	})
+	if err != nil {
+		t.Fatalf("create audit: %v", err)
+	}
 
 	progress, err := r.GetAuditProgress(ctx, auditID)
 	if err != nil {

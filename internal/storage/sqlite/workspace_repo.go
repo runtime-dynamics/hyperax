@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/hyperax/hyperax/pkg/types"
 )
@@ -37,7 +36,10 @@ func (r *WorkspaceRepo) ListWorkspaces(ctx context.Context) ([]*types.WorkspaceI
 		if err := rows.Scan(&ws.ID, &ws.Name, &ws.RootPath, &createdAt, &ws.Metadata); err != nil {
 			return nil, fmt.Errorf("sqlite.WorkspaceRepo.ListWorkspaces: %w", err)
 		}
-		ws.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var parseErr error
+		if ws.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.WorkspaceRepo.ListWorkspaces"); parseErr != nil {
+			return nil, parseErr
+		}
 		workspaces = append(workspaces, ws)
 	}
 	if err := rows.Err(); err != nil {
@@ -59,7 +61,9 @@ func (r *WorkspaceRepo) GetWorkspace(ctx context.Context, name string) (*types.W
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.WorkspaceRepo.GetWorkspace: %w", err)
 	}
-	ws.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	if ws.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.WorkspaceRepo.GetWorkspace"); err != nil {
+		return nil, err
+	}
 	return ws, nil
 }
 

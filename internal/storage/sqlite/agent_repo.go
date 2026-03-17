@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/internal/repo"
@@ -49,8 +48,12 @@ func scanAgent(a *repo.Agent, scanner interface{ Scan(...any) error }) error {
 	}
 	a.IsInternal = isInternal == 1
 	a.GuardBypass = guardBypass == 1
-	a.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	a.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if a.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.scanAgent"); err != nil {
+		return err
+	}
+	if a.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.scanAgent"); err != nil {
+		return err
+	}
 
 	return nil
 }

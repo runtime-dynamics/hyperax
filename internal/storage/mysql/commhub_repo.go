@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/pkg/types"
@@ -408,7 +407,7 @@ func (r *CommHubRepo) DrainOverflow(ctx context.Context, agentID string, limit i
 			return nil, fmt.Errorf("mysql.CommHubRepo.DrainOverflow: %w", err)
 		}
 		if err := json.Unmarshal([]byte(metaJSON), &e.Metadata); err != nil {
-			slog.Error("failed to unmarshal overflow metadata from database", "error", err)
+			return nil, fmt.Errorf("mysql.CommHubRepo.DrainOverflow: unmarshal metadata: %w", err)
 		}
 		if e.Metadata == nil {
 			e.Metadata = make(map[string]string)
@@ -423,7 +422,7 @@ func (r *CommHubRepo) DrainOverflow(ctx context.Context, agentID string, limit i
 	// Mark as retrieved.
 	for _, id := range ids {
 		if _, err := r.db.ExecContext(ctx, "UPDATE commhub_overflow SET retrieved = 1 WHERE id = ?", id); err != nil {
-			slog.Error("failed to mark overflow as retrieved — may cause duplicate delivery", "id", id, "error", err)
+			return nil, fmt.Errorf("mysql.CommHubRepo.DrainOverflow: mark retrieved id=%v: %w", id, err)
 		}
 	}
 	return entries, nil

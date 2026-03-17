@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -76,7 +75,10 @@ func (r *MemoryRepo) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("sqlite.MemoryRepo.Delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("sqlite.MemoryRepo.Delete: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("repo.MemoryRepo.Delete: memory %q not found", id)
 	}
@@ -381,7 +383,10 @@ func (r *MemoryRepo) GetAnnotations(ctx context.Context, memoryID string) ([]*ty
 		if err := rows.Scan(&a.ID, &a.MemoryID, &a.Annotation, &a.AnnotationType, &a.CreatedBy, &createdAt); err != nil {
 			return nil, fmt.Errorf("sqlite.MemoryRepo.GetAnnotations: %w", err)
 		}
-		a.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var parseErr error
+		if a.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.MemoryRepo.GetAnnotations"); parseErr != nil {
+			return nil, parseErr
+		}
 		anns = append(anns, a)
 	}
 	if err := rows.Err(); err != nil {
@@ -441,14 +446,20 @@ func scanMemory(row *sql.Row) (*types.Memory, error) {
 	m.AccessCount = accessCount
 	m.ConsolidatedInto = consolidatedInto.String
 	m.ContestedBy = contestedBy.String
-	m.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	m.AccessedAt, _ = time.Parse("2006-01-02 15:04:05", accessedAt)
+	if m.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.scanMemory"); err != nil {
+		return nil, err
+	}
+	if m.AccessedAt, err = parseSQLiteTime(accessedAt, "sqlite.scanMemory"); err != nil {
+		return nil, err
+	}
 	if contestAt.Valid {
-		m.ContestedAt, _ = time.Parse("2006-01-02 15:04:05", contestAt.String)
+		if m.ContestedAt, err = parseSQLiteTime(contestAt.String, "sqlite.scanMemory.contestedAt"); err != nil {
+			return nil, err
+		}
 	}
 	if metadataStr.Valid && metadataStr.String != "" {
 		if err := json.Unmarshal([]byte(metadataStr.String), &m.Metadata); err != nil {
-			slog.Error("failed to unmarshal memory metadata from database", "error", err)
+			return nil, fmt.Errorf("sqlite.scanMemory: unmarshal metadata: %w", err)
 		}
 	}
 
@@ -482,14 +493,20 @@ func scanMemoryRow(rows *sql.Rows) (*types.Memory, error) {
 	m.AccessCount = accessCount
 	m.ConsolidatedInto = consolidatedInto.String
 	m.ContestedBy = contestedBy.String
-	m.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	m.AccessedAt, _ = time.Parse("2006-01-02 15:04:05", accessedAt)
+	if m.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.scanMemoryRow"); err != nil {
+		return nil, err
+	}
+	if m.AccessedAt, err = parseSQLiteTime(accessedAt, "sqlite.scanMemoryRow"); err != nil {
+		return nil, err
+	}
 	if contestAt.Valid {
-		m.ContestedAt, _ = time.Parse("2006-01-02 15:04:05", contestAt.String)
+		if m.ContestedAt, err = parseSQLiteTime(contestAt.String, "sqlite.scanMemoryRow.contestedAt"); err != nil {
+			return nil, err
+		}
 	}
 	if metadataStr.Valid && metadataStr.String != "" {
 		if err := json.Unmarshal([]byte(metadataStr.String), &m.Metadata); err != nil {
-			slog.Error("failed to unmarshal memory metadata from database", "error", err)
+			return nil, fmt.Errorf("sqlite.scanMemoryRow: unmarshal metadata: %w", err)
 		}
 	}
 

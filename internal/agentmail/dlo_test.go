@@ -135,9 +135,13 @@ func TestDLO_RetryMaxExceeded(t *testing.T) {
 		return fmt.Errorf("fail")
 	})
 
-	// Exhaust retries.
-	_ = dlo.Retry(context.Background(), entryID)
-	_ = dlo.Retry(context.Background(), entryID)
+	// Exhaust retries (errors expected since retry func always fails).
+	if err := dlo.Retry(context.Background(), entryID); err == nil {
+		t.Fatal("expected error from retry 1")
+	}
+	if err := dlo.Retry(context.Background(), entryID); err == nil {
+		t.Fatal("expected error from retry 2")
+	}
 
 	// Third attempt should be rejected.
 	if err := dlo.Retry(context.Background(), entryID); err == nil {

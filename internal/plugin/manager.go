@@ -846,7 +846,9 @@ func (pm *PluginManager) startMCPRuntime(ctx context.Context, lp *LoadedPlugin) 
 	_, err = client.Initialize(initCtx)
 	if err != nil {
 		clientCancel()
-		_ = sp.Stop()
+		if stopErr := sp.Stop(); stopErr != nil {
+			pm.logger.Error("failed to stop subprocess after initialize error", "plugin", pluginName, "error", stopErr)
+		}
 		return fmt.Errorf("plugin.PluginManager.startMCPRuntime: MCP initialize: %w", err)
 	}
 
@@ -854,7 +856,9 @@ func (pm *PluginManager) startMCPRuntime(ctx context.Context, lp *LoadedPlugin) 
 	tools, err := client.ListTools(initCtx)
 	if err != nil {
 		clientCancel()
-		_ = sp.Stop()
+		if stopErr := sp.Stop(); stopErr != nil {
+			pm.logger.Error("failed to stop subprocess after tools/list error", "plugin", pluginName, "error", stopErr)
+		}
 		return fmt.Errorf("plugin.PluginManager.startMCPRuntime: MCP tools/list: %w", err)
 	}
 
@@ -1061,7 +1065,10 @@ func buildInputSchema(tool types.ToolDef) json.RawMessage {
 		schema["required"] = []string{}
 	}
 
-	data, _ := json.Marshal(schema)
+	data, err := json.Marshal(schema)
+	if err != nil {
+		return json.RawMessage(`{"type":"object","properties":{},"required":[]}`)
+	}
 	return data
 }
 
@@ -1269,7 +1276,12 @@ func (pm *PluginManager) createPluginResources(ctx context.Context, lp *LoadedPl
 			if jobType == "" {
 				jobType = "tool"
 			}
-			payloadBytes, _ := json.Marshal(res.Config["payload"])
+			payloadBytes, err := json.Marshal(res.Config["payload"])
+			if err != nil {
+				pm.logger.Warn("failed to marshal cron job payload",
+					"plugin", lp.Manifest.Name, "resource", res.Name, "error", err)
+				continue
+			}
 			cronName := fmt.Sprintf("plugin:%s:%s", lp.Manifest.Name, res.Name)
 			job := &repo.CronJob{
 				Name:     cronName,
@@ -1298,7 +1310,10 @@ func (pm *PluginManager) createPluginResources(ctx context.Context, lp *LoadedPl
 	}
 	// Persist created resource IDs in the install registry.
 	if pm.installRegistry != nil && len(created) > 0 {
-		pm.installRegistry.SetCreatedResources(lp.Manifest.Name, created)
+		if err := pm.installRegistry.SetCreatedResources(lp.Manifest.Name, created); err != nil {
+			pm.logger.Error("failed to persist created resources in registry",
+				"plugin", lp.Manifest.Name, "error", err)
+		}
 	}
 }
 
@@ -1326,7 +1341,10 @@ func (pm *PluginManager) cleanupPluginResources(ctx context.Context, lp *LoadedP
 				"plugin", lp.Manifest.Name, "type", res.Type)
 		}
 	}
-	pm.installRegistry.ClearCreatedResources(lp.Manifest.Name)
+	if err := pm.installRegistry.ClearCreatedResources(lp.Manifest.Name); err != nil {
+		pm.logger.Error("failed to clear created resources in registry",
+			"plugin", lp.Manifest.Name, "error", err)
+	}
 }
 
 // clearanceForIntegration returns the ABAC clearance level for a plugin

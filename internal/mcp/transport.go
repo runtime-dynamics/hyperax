@@ -171,7 +171,11 @@ func (t *SSETransport) HandleMessage(w http.ResponseWriter, r *http.Request) {
 	resp := t.processRequest(ctx, &req)
 	t.logger.Info("mcp sse response", "method", req.Method, "has_error", resp.Error != nil)
 
-	data, _ := json.Marshal(resp)
+	data, err := json.Marshal(resp)
+	if err != nil {
+		t.logger.Error("failed to marshal SSE response", "method", req.Method, "error", err)
+		return
+	}
 	select {
 	case events <- data:
 	default:
@@ -245,7 +249,7 @@ func (t *SSETransport) processRequest(ctx context.Context, req *JSONRPCRequest) 
 }
 
 func (t *SSETransport) handleInitialize(req *JSONRPCRequest) *JSONRPCResponse {
-	result, _ := json.Marshal(map[string]any{
+	result, err := json.Marshal(map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities": map[string]any{
 			"tools": map[string]any{
@@ -257,6 +261,13 @@ func (t *SSETransport) handleInitialize(req *JSONRPCRequest) *JSONRPCResponse {
 			"version": "0.1.0",
 		},
 	})
+	if err != nil {
+		return &JSONRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &JSONRPCError{Code: -32603, Message: "internal error: failed to marshal initialize response"},
+		}
+	}
 	return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
 }
 
@@ -270,7 +281,14 @@ func (t *SSETransport) handleToolsList(req *JSONRPCRequest) *JSONRPCResponse {
 			"inputSchema": json.RawMessage(s.InputSchema),
 		}
 	}
-	result, _ := json.Marshal(map[string]any{"tools": tools})
+	result, err := json.Marshal(map[string]any{"tools": tools})
+	if err != nil {
+		return &JSONRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &JSONRPCError{Code: -32603, Message: "internal error: failed to marshal tools list"},
+		}
+	}
 	return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
 }
 
@@ -302,7 +320,14 @@ func (t *SSETransport) handleToolsCall(ctx context.Context, req *JSONRPCRequest)
 		}
 	}
 
-	data, _ := json.Marshal(result)
+	data, err := json.Marshal(result)
+	if err != nil {
+		return &JSONRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &JSONRPCError{Code: -32603, Message: "internal error: failed to marshal tool result"},
+		}
+	}
 	return &JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: data}
 }
 
@@ -312,7 +337,12 @@ func writeJSONRPCError(w http.ResponseWriter, id json.RawMessage, code int, mess
 		ID:      id,
 		Error:   &JSONRPCError{Code: code, Message: message},
 	}
-	data, _ := json.Marshal(resp)
+	data, err := json.Marshal(resp)
+	if err != nil {
+		slog.Error("failed to marshal JSON-RPC error response", "code", code, "message", message, "error", err)
+		http.Error(w, `{"jsonrpc":"2.0","error":{"code":-32603,"message":"internal marshal error"}}`, http.StatusInternalServerError)
+		return
+	}
 	render.Flush(w, http.StatusOK, data)
 }
 

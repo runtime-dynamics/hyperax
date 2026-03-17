@@ -965,7 +965,11 @@ func tailLogFile(path string, n int) ([]string, error) {
 		}
 		return nil, fmt.Errorf("open: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	var allLines []string
 	scanner := bufio.NewScanner(f)

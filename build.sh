@@ -26,7 +26,7 @@ if [ ! -f "$HASH_FILE" ] || [ "$(cat "$HASH_FILE" 2>/dev/null)" != "$UI_SRC_HASH
 else
   log "UI unchanged, skipping React build."
 fi
-
+rm -f $BUILD_DIR/hyperax
 # Build Go binary
 log "Building Go binary..."
 if go build -o "$BUILD_DIR/hyperax" ./cmd/hyperax 2>&1 | tee -a "$BUILD_LOG"; then

@@ -242,7 +242,10 @@ func (m *ActionManager) publishEvent(eventType types.EventType, action types.Gua
 	if m.bus == nil {
 		return
 	}
-	payload, _ := json.Marshal(action)
+	payload, err := json.Marshal(action)
+	if err != nil {
+		return
+	}
 	m.bus.Publish(types.NervousEvent{
 		Type:      eventType,
 		Scope:     "guard",

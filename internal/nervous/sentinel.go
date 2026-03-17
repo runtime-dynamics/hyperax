@@ -70,7 +70,9 @@ func (s *Sentinel) Unwatch(path string) {
 		return
 	}
 
-	_ = s.watcher.Remove(path)
+	if err := s.watcher.Remove(path); err != nil {
+		s.logger.Debug("sentinel: failed to remove watcher", "path", path, "error", err)
+	}
 	delete(s.watched, path)
 }
 
@@ -88,7 +90,9 @@ func (s *Sentinel) Run(ctx context.Context) {
 	}
 
 	defer func() {
-		_ = w.Close()
+		if err := w.Close(); err != nil {
+			s.logger.Debug("sentinel: failed to close watcher", "error", err)
+		}
 	}()
 
 	for {

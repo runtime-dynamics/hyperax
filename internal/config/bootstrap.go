@@ -111,7 +111,10 @@ type BootstrapStorage struct {
 // LoadBootstrap reads the minimal startup configuration from hyperax.yaml.
 // If no config file is found, sensible defaults are used.
 func LoadBootstrap() (*BootstrapConfig, error) {
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("config.LoadBootstrap: resolve home dir: %w", err)
+	}
 
 	cfg := &BootstrapConfig{
 		ListenAddr:      ":9090",

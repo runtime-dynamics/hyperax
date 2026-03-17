@@ -111,18 +111,24 @@ func TestCommLogger_GetLog(t *testing.T) {
 	ctx := context.Background()
 
 	// Manually add entries via repo.
-	_ = repo.LogMessage(ctx, &types.CommLogEntry{
+	if err := repo.LogMessage(ctx, &types.CommLogEntry{
 		FromAgent: "agent-a", ToAgent: "agent-b", Direction: "sent",
 		ContentType: "text", Content: "msg-1", Trust: "internal",
-	})
-	_ = repo.LogMessage(ctx, &types.CommLogEntry{
+	}); err != nil {
+		t.Fatalf("log message 1: %v", err)
+	}
+	if err := repo.LogMessage(ctx, &types.CommLogEntry{
 		FromAgent: "agent-c", ToAgent: "agent-a", Direction: "sent",
 		ContentType: "text", Content: "msg-2", Trust: "internal",
-	})
-	_ = repo.LogMessage(ctx, &types.CommLogEntry{
+	}); err != nil {
+		t.Fatalf("log message 2: %v", err)
+	}
+	if err := repo.LogMessage(ctx, &types.CommLogEntry{
 		FromAgent: "agent-c", ToAgent: "agent-d", Direction: "sent",
 		ContentType: "text", Content: "msg-3", Trust: "internal",
-	})
+	}); err != nil {
+		t.Fatalf("log message 3: %v", err)
+	}
 
 	// agent-a involved in 2 messages.
 	entries, err := cl.GetLog(ctx, "agent-a", 10)
@@ -138,18 +144,24 @@ func TestCommLogger_GetLogBetween(t *testing.T) {
 	cl, repo := newTestCommLogger()
 	ctx := context.Background()
 
-	_ = repo.LogMessage(ctx, &types.CommLogEntry{
+	if err := repo.LogMessage(ctx, &types.CommLogEntry{
 		FromAgent: "agent-a", ToAgent: "agent-b", Direction: "sent",
 		ContentType: "text", Content: "hello", Trust: "internal",
-	})
-	_ = repo.LogMessage(ctx, &types.CommLogEntry{
+	}); err != nil {
+		t.Fatalf("log message 1: %v", err)
+	}
+	if err := repo.LogMessage(ctx, &types.CommLogEntry{
 		FromAgent: "agent-b", ToAgent: "agent-a", Direction: "sent",
 		ContentType: "text", Content: "hi back", Trust: "internal",
-	})
-	_ = repo.LogMessage(ctx, &types.CommLogEntry{
+	}); err != nil {
+		t.Fatalf("log message 2: %v", err)
+	}
+	if err := repo.LogMessage(ctx, &types.CommLogEntry{
 		FromAgent: "agent-a", ToAgent: "agent-c", Direction: "sent",
 		ContentType: "text", Content: "different pair", Trust: "internal",
-	})
+	}); err != nil {
+		t.Fatalf("log message 3: %v", err)
+	}
 
 	entries, err := cl.GetLogBetween(ctx, "agent-a", "agent-b", 10)
 	if err != nil {
@@ -174,7 +186,7 @@ func TestCommLogger_GetLog_NilRepoReturnsNil(t *testing.T) {
 }
 
 func TestCommLogger_MultipleEntries(t *testing.T) {
-	cl, _ := newTestCommLogger()
+	cl, _ := newTestCommLogger() //nolint:dogsled // repo not needed in this test
 	ctx := context.Background()
 
 	// Log multiple messages.

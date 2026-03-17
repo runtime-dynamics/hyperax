@@ -113,7 +113,10 @@ func (r *PluginRepo) DeletePlugin(ctx context.Context, name string) error {
 	if err != nil {
 		return fmt.Errorf("sqlite.PluginRepo.DeletePlugin: delete plugin %q: %w", name, err)
 	}
-	affected, _ := result.RowsAffected()
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("sqlite.PluginRepo.DeletePlugin: delete plugin %q: %w", name, err)
+	}
 	if affected == 0 {
 		return repo.ErrNotFound
 	}
@@ -150,9 +153,14 @@ func scanPlugin(row *sql.Row) (*types.PluginState, error) {
 
 	state.Type = types.PluginType(pluginType)
 	state.Enabled = enabled != 0
-	state.LoadedAt, _ = time.Parse(sqliteTimeFormat, loadedAt)
+	if state.LoadedAt, err = parseSQLiteTime(loadedAt, "sqlite.scanPlugin"); err != nil {
+		return nil, err
+	}
 	if lastHealthAt.Valid {
-		t, _ := time.Parse(sqliteTimeFormat, lastHealthAt.String)
+		t, parseErr := parseSQLiteTime(lastHealthAt.String, "sqlite.scanPlugin.lastHealthAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		state.LastHealthAt = &t
 	}
 
@@ -189,9 +197,14 @@ func scanPluginRow(rows *sql.Rows) (*types.PluginState, error) {
 
 	state.Type = types.PluginType(pluginType)
 	state.Enabled = enabled != 0
-	state.LoadedAt, _ = time.Parse(sqliteTimeFormat, loadedAt)
+	if state.LoadedAt, err = parseSQLiteTime(loadedAt, "sqlite.scanPluginRow"); err != nil {
+		return nil, err
+	}
 	if lastHealthAt.Valid {
-		t, _ := time.Parse(sqliteTimeFormat, lastHealthAt.String)
+		t, parseErr := parseSQLiteTime(lastHealthAt.String, "sqlite.scanPluginRow.lastHealthAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		state.LastHealthAt = &t
 	}
 

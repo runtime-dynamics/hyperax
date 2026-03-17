@@ -216,7 +216,11 @@ func (s *Service) publishEvent(eventType string, payload map[string]string) {
 	if s.bus == nil {
 		return
 	}
-	data, _ := json.Marshal(payload)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		s.logger.Error("delegation.Service.publishEvent: marshal payload failed", "error", err)
+		return
+	}
 	s.bus.Publish(types.NervousEvent{
 		Type:      types.EventType(eventType),
 		Scope:     "delegation",

@@ -61,7 +61,10 @@ func TestE2E_ChatCompletionRecordsProviderCost(t *testing.T) {
 		"to":      "CostTestAgent",
 		"content": "What is 2+2?",
 	}
-	bodyJSON, _ := json.Marshal(chatBody)
+	bodyJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		t.Fatalf("marshal chat body: %v", err)
+	}
 	resp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
 	if err != nil {
 		t.Fatalf("POST /api/v1/chat/send: %v", err)
@@ -106,7 +109,7 @@ func TestE2E_BudgetThresholdBreachTriggersInterjection(t *testing.T) {
 	mockLLM := newMockLLMServer(t, 1, "gpt-4")
 	defer mockLLM.Close()
 
-	providerID, _ := h.app.Store.Providers.Create(ctx, &repo.Provider{
+	providerID, err := h.app.Store.Providers.Create(ctx, &repo.Provider{
 		Name:      "threshold-test-provider",
 		Kind:      "openai",
 		BaseURL:   mockLLM.URL,
@@ -114,18 +117,24 @@ func TestE2E_BudgetThresholdBreachTriggersInterjection(t *testing.T) {
 		IsEnabled: true,
 		Models:    `["gpt-4"]`,
 	})
+	if err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
 
-	_, _ = h.app.Store.Agents.Create(ctx, &repo.Agent{
+	_, err = h.app.Store.Agents.Create(ctx, &repo.Agent{
 		Name:           "ThresholdTestAgent",
 		ClearanceLevel: 1,
 		ProviderID:     providerID,
 		DefaultModel:   "gpt-4",
 		SystemPrompt:   "You are a test assistant.",
 	})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
 
 	// --- 2. Set a very low budget threshold (e.g., $0.000001) ---
 	budgetScope := "provider:" + providerID
-	err := h.app.Store.Budgets.SetBudgetThreshold(ctx, budgetScope, 0.000001)
+	err = h.app.Store.Budgets.SetBudgetThreshold(ctx, budgetScope, 0.000001)
 	if err != nil {
 		t.Fatalf("set budget threshold: %v", err)
 	}
@@ -139,8 +148,15 @@ func TestE2E_BudgetThresholdBreachTriggersInterjection(t *testing.T) {
 		"to":      "ThresholdTestAgent",
 		"content": "Hello, how are you?",
 	}
-	bodyJSON, _ := json.Marshal(chatBody)
-	http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
+	bodyJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		t.Fatalf("marshal chat body: %v", err)
+	}
+	budgetResp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
+	if err != nil {
+		t.Fatalf("POST /api/v1/chat/send: %v", err)
+	}
+	defer budgetResp.Body.Close()
 
 	// --- 5. Wait for completion and budget event ---
 	// Note: budget threshold checking depends on AlertEvaluator running asynchronously.
@@ -181,7 +197,7 @@ func TestE2E_SessionTelemetryLifecycle(t *testing.T) {
 	mockLLM := newMockLLMServer(t, 1, "gpt-4")
 	defer mockLLM.Close()
 
-	providerID, _ := h.app.Store.Providers.Create(ctx, &repo.Provider{
+	providerID, err := h.app.Store.Providers.Create(ctx, &repo.Provider{
 		Name:      "telemetry-test-provider",
 		Kind:      "openai",
 		BaseURL:   mockLLM.URL,
@@ -189,14 +205,20 @@ func TestE2E_SessionTelemetryLifecycle(t *testing.T) {
 		IsEnabled: true,
 		Models:    `["gpt-4"]`,
 	})
+	if err != nil {
+		t.Fatalf("create provider: %v", err)
+	}
 
-	agentID, _ := h.app.Store.Agents.Create(ctx, &repo.Agent{
+	agentID, err := h.app.Store.Agents.Create(ctx, &repo.Agent{
 		Name:           "TelemetryTestAgent",
 		ClearanceLevel: 1,
 		ProviderID:     providerID,
 		DefaultModel:   "gpt-4",
 		SystemPrompt:   "You are a test assistant.",
 	})
+	if err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
 
 	// --- 2. Send chat message to trigger completion and session creation ---
 	chatBody := map[string]string{
@@ -204,7 +226,10 @@ func TestE2E_SessionTelemetryLifecycle(t *testing.T) {
 		"to":      "TelemetryTestAgent",
 		"content": "What is 2+2?",
 	}
-	bodyJSON, _ := json.Marshal(chatBody)
+	bodyJSON, err := json.Marshal(chatBody)
+	if err != nil {
+		t.Fatalf("marshal chat body: %v", err)
+	}
 	resp, err := http.Post(h.server.URL+"/api/v1/chat/send", "application/json", bytes.NewReader(bodyJSON))
 	if err != nil {
 		t.Fatalf("POST /api/v1/chat/send: %v", err)
@@ -325,7 +350,10 @@ func newMockLLMServer(t *testing.T, iterations int, model string) *httptest.Serv
 					"total_tokens":      120,
 				},
 			}
-			_ = json.NewEncoder(w).Encode(resp)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		} else {
 			// Return final text response (after N iterations).
 			resp := map[string]any{
@@ -348,7 +376,10 @@ func newMockLLMServer(t *testing.T, iterations int, model string) *httptest.Serv
 					"total_tokens":      165,
 				},
 			}
-			_ = json.NewEncoder(w).Encode(resp)
+			if err := json.NewEncoder(w).Encode(resp); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 	}))
 

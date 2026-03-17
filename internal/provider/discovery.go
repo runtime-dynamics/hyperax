@@ -253,7 +253,11 @@ func discoverBedrock(ctx context.Context, baseURL, apiKey string) ([]string, err
 	if err != nil {
 		return nil, fmt.Errorf("provider.discoverBedrock: connect: %w", err)
 	}
-	defer func() { _ = httpResp.Body.Close() }()
+	defer func() {
+		if cerr := httpResp.Body.Close(); cerr != nil {
+			slog.Debug("discoverBedrock: failed to close response body", "error", cerr)
+		}
+	}()
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -315,7 +319,11 @@ func doGet(ctx context.Context, url string, headers map[string]string) ([]byte, 
 	if err != nil {
 		return nil, fmt.Errorf("provider.doGet: connect to %s: %w", url, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Debug("doGet: failed to close response body", "error", cerr)
+		}
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

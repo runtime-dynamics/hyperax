@@ -350,10 +350,13 @@ func TestCronRepo_CreateAndGetHistory(t *testing.T) {
 func TestCronRepo_CompleteExecution(t *testing.T) {
 	r, ctx := newCronRepo(t)
 
-	jobID, _ := r.CreateJob(ctx, &repo.CronJob{
+	jobID, err := r.CreateJob(ctx, &repo.CronJob{
 		Name: "job", Schedule: "@hourly", JobType: "tool",
 		Payload: json.RawMessage("{}"), Enabled: true,
 	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	exec := &repo.CronExecution{
 		CronJobID: jobID,
@@ -361,13 +364,19 @@ func TestCronRepo_CompleteExecution(t *testing.T) {
 		StartedAt: time.Now(),
 		Attempt:   1,
 	}
-	execID, _ := r.CreateExecution(ctx, exec)
+	execID, err := r.CreateExecution(ctx, exec)
+	if err != nil {
+		t.Fatalf("create execution: %v", err)
+	}
 
 	if err := r.CompleteExecution(ctx, execID, "completed", ""); err != nil {
 		t.Fatalf("complete execution: %v", err)
 	}
 
-	history, _ := r.GetHistory(ctx, jobID, 10)
+	history, err := r.GetHistory(ctx, jobID, 10)
+	if err != nil {
+		t.Fatalf("get history: %v", err)
+	}
 	if len(history) != 1 {
 		t.Fatalf("expected 1, got %d", len(history))
 	}
@@ -382,10 +391,13 @@ func TestCronRepo_CompleteExecution(t *testing.T) {
 func TestCronRepo_CompleteExecutionFailed(t *testing.T) {
 	r, ctx := newCronRepo(t)
 
-	jobID, _ := r.CreateJob(ctx, &repo.CronJob{
+	jobID, err := r.CreateJob(ctx, &repo.CronJob{
 		Name: "job", Schedule: "@hourly", JobType: "tool",
 		Payload: json.RawMessage("{}"), Enabled: true,
 	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	exec := &repo.CronExecution{
 		CronJobID: jobID,
@@ -393,13 +405,19 @@ func TestCronRepo_CompleteExecutionFailed(t *testing.T) {
 		StartedAt: time.Now(),
 		Attempt:   1,
 	}
-	execID, _ := r.CreateExecution(ctx, exec)
+	execID, err := r.CreateExecution(ctx, exec)
+	if err != nil {
+		t.Fatalf("create execution: %v", err)
+	}
 
 	if err := r.CompleteExecution(ctx, execID, "failed", "timeout exceeded"); err != nil {
 		t.Fatalf("complete execution: %v", err)
 	}
 
-	history, _ := r.GetHistory(ctx, jobID, 10)
+	history, err := r.GetHistory(ctx, jobID, 10)
+	if err != nil {
+		t.Fatalf("get history: %v", err)
+	}
 	if history[0].Status != "failed" {
 		t.Errorf("status = %q, want %q", history[0].Status, "failed")
 	}
@@ -411,10 +429,13 @@ func TestCronRepo_CompleteExecutionFailed(t *testing.T) {
 func TestCronRepo_DLQ(t *testing.T) {
 	r, ctx := newCronRepo(t)
 
-	jobID, _ := r.CreateJob(ctx, &repo.CronJob{
+	jobID, err := r.CreateJob(ctx, &repo.CronJob{
 		Name: "failing-job", Schedule: "@hourly", JobType: "tool",
 		Payload: json.RawMessage("{}"), Enabled: true,
 	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	entry := &repo.CronDLQEntry{
 		CronJobID: jobID,
@@ -447,10 +468,13 @@ func TestCronRepo_RetryFromDLQ(t *testing.T) {
 	r, ctx := newCronRepo(t)
 
 	// Create a disabled job to simulate retry scenario.
-	jobID, _ := r.CreateJob(ctx, &repo.CronJob{
+	jobID, err := r.CreateJob(ctx, &repo.CronJob{
 		Name: "retryable", Schedule: "@hourly", JobType: "tool",
 		Payload: json.RawMessage("{}"), Enabled: false,
 	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	entry := &repo.CronDLQEntry{
 		CronJobID: jobID,
@@ -463,7 +487,10 @@ func TestCronRepo_RetryFromDLQ(t *testing.T) {
 		t.Fatalf("add to DLQ: %v", err)
 	}
 
-	dlq, _ := r.ListDLQ(ctx)
+	dlq, err := r.ListDLQ(ctx)
+	if err != nil {
+		t.Fatalf("list DLQ: %v", err)
+	}
 	dlqID := dlq[0].ID
 
 	if err := r.RetryFromDLQ(ctx, dlqID); err != nil {
@@ -471,13 +498,19 @@ func TestCronRepo_RetryFromDLQ(t *testing.T) {
 	}
 
 	// DLQ should be empty.
-	dlq, _ = r.ListDLQ(ctx)
+	dlq, err = r.ListDLQ(ctx)
+	if err != nil {
+		t.Fatalf("list DLQ: %v", err)
+	}
 	if len(dlq) != 0 {
 		t.Errorf("expected 0 DLQ entries, got %d", len(dlq))
 	}
 
 	// Job should be re-enabled.
-	job, _ := r.GetJob(ctx, jobID)
+	job, err := r.GetJob(ctx, jobID)
+	if err != nil {
+		t.Fatalf("get job: %v", err)
+	}
 	if !job.Enabled {
 		t.Error("expected job to be re-enabled after retry")
 	}
@@ -497,14 +530,20 @@ func TestCronRepo_DeleteFromDLQ(t *testing.T) {
 		t.Fatalf("add to DLQ: %v", err)
 	}
 
-	dlq, _ := r.ListDLQ(ctx)
+	dlq, err := r.ListDLQ(ctx)
+	if err != nil {
+		t.Fatalf("list DLQ: %v", err)
+	}
 	dlqID := dlq[0].ID
 
 	if err := r.DeleteFromDLQ(ctx, dlqID); err != nil {
 		t.Fatalf("delete from DLQ: %v", err)
 	}
 
-	dlq, _ = r.ListDLQ(ctx)
+	dlq, err = r.ListDLQ(ctx)
+	if err != nil {
+		t.Fatalf("list DLQ: %v", err)
+	}
 	if len(dlq) != 0 {
 		t.Errorf("expected 0 DLQ entries, got %d", len(dlq))
 	}
@@ -522,10 +561,13 @@ func TestCronRepo_DeleteFromDLQNotFound(t *testing.T) {
 func TestCronRepo_GetHistoryEmpty(t *testing.T) {
 	r, ctx := newCronRepo(t)
 
-	jobID, _ := r.CreateJob(ctx, &repo.CronJob{
+	jobID, err := r.CreateJob(ctx, &repo.CronJob{
 		Name: "no-history", Schedule: "@hourly", JobType: "tool",
 		Payload: json.RawMessage("{}"), Enabled: true,
 	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	history, err := r.GetHistory(ctx, jobID, 10)
 	if err != nil {
@@ -539,19 +581,24 @@ func TestCronRepo_GetHistoryEmpty(t *testing.T) {
 func TestCronRepo_GetHistoryLimit(t *testing.T) {
 	r, ctx := newCronRepo(t)
 
-	jobID, _ := r.CreateJob(ctx, &repo.CronJob{
+	jobID, err := r.CreateJob(ctx, &repo.CronJob{
 		Name: "many-execs", Schedule: "@hourly", JobType: "tool",
 		Payload: json.RawMessage("{}"), Enabled: true,
 	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
 	// Create 5 executions.
 	for i := 0; i < 5; i++ {
-		_, _ = r.CreateExecution(ctx, &repo.CronExecution{
+		if _, err := r.CreateExecution(ctx, &repo.CronExecution{
 			CronJobID: jobID,
 			Status:    "completed",
 			StartedAt: time.Now(),
 			Attempt:   i + 1,
-		})
+		}); err != nil {
+			t.Fatalf("create execution %d: %v", i, err)
+		}
 	}
 
 	history, err := r.GetHistory(ctx, jobID, 3)
@@ -566,24 +613,32 @@ func TestCronRepo_GetHistoryLimit(t *testing.T) {
 func TestCronRepo_CascadeDeleteExecutions(t *testing.T) {
 	r, ctx := newCronRepo(t)
 
-	jobID, _ := r.CreateJob(ctx, &repo.CronJob{
+	jobID, err := r.CreateJob(ctx, &repo.CronJob{
 		Name: "cascading", Schedule: "@hourly", JobType: "tool",
 		Payload: json.RawMessage("{}"), Enabled: true,
 	})
+	if err != nil {
+		t.Fatalf("create job: %v", err)
+	}
 
-	_, _ = r.CreateExecution(ctx, &repo.CronExecution{
+	if _, err := r.CreateExecution(ctx, &repo.CronExecution{
 		CronJobID: jobID,
 		Status:    "running",
 		StartedAt: time.Now(),
 		Attempt:   1,
-	})
+	}); err != nil {
+		t.Fatalf("create execution: %v", err)
+	}
 
 	// Deleting the job should cascade-delete executions.
 	if err := r.DeleteJob(ctx, jobID); err != nil {
 		t.Fatalf("delete job: %v", err)
 	}
 
-	history, _ := r.GetHistory(ctx, jobID, 10)
+	history, err := r.GetHistory(ctx, jobID, 10)
+	if err != nil {
+		t.Fatalf("get history: %v", err)
+	}
 	if len(history) != 0 {
 		t.Errorf("expected 0 executions after cascade delete, got %d", len(history))
 	}

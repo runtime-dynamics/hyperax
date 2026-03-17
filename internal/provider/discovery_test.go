@@ -206,7 +206,9 @@ func TestDiscoverModels_Custom_Success(t *testing.T) {
 			t.Errorf("expected /models path, got %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintln(w, `{"data": [{"id": "custom-model-1"}, {"id": "custom-model-2"}]}`)
+		if _, err := fmt.Fprintln(w, `{"data": [{"id": "custom-model-1"}, {"id": "custom-model-2"}]}`); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}))
 	defer ts.Close()
 

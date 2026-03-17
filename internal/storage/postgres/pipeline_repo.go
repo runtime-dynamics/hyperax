@@ -126,7 +126,10 @@ func (r *PipelineRepo) UpdateJobStatus(ctx context.Context, id string, status st
 	if err != nil {
 		return fmt.Errorf("postgres.PipelineRepo.UpdateJobStatus: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.PipelineRepo.UpdateJobStatus: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("job %q not found", id)
 	}
@@ -340,7 +343,10 @@ func (r *PipelineRepo) DeleteAssignment(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.PipelineRepo.DeleteAssignment: %w", err)
 	}
-	affected, _ := res.RowsAffected()
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.PipelineRepo.DeleteAssignment: %w", err)
+	}
 	if affected == 0 {
 		return fmt.Errorf("assignment %q not found", id)
 	}

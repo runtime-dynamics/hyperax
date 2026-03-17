@@ -308,10 +308,16 @@ func TestGetPlugin_ReturnsCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state1, _ := pm.GetPlugin("test-plugin")
+	state1, err := pm.GetPlugin("test-plugin")
+	if err != nil {
+		t.Fatalf("GetPlugin() error: %v", err)
+	}
 	state1.Status = "mutated"
 
-	state2, _ := pm.GetPlugin("test-plugin")
+	state2, err := pm.GetPlugin("test-plugin")
+	if err != nil {
+		t.Fatalf("GetPlugin() error: %v", err)
+	}
 	if state2.Status == "mutated" {
 		t.Error("GetPlugin() should return a copy, not a reference to internal state")
 	}

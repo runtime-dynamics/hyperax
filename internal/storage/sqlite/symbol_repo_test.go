@@ -141,7 +141,10 @@ func TestSymbolRepo_GetFileSymbols_OrderedByLine(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &SymbolRepo{db: db.db}
 
-	fileID, _ := r.UpsertFileHash(ctx, "ws-1", "server.go", "hash1")
+	fileID, err := r.UpsertFileHash(ctx, "ws-1", "server.go", "hash1")
+	if err != nil {
+		t.Fatalf("upsert file hash: %v", err)
+	}
 
 	// Insert in reverse order to verify ORDER BY start_line.
 	for _, s := range []*repo.Symbol{
@@ -179,7 +182,10 @@ func TestSymbolRepo_DeleteByFile(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &SymbolRepo{db: db.db}
 
-	fileID, _ := r.UpsertFileHash(ctx, "ws-1", "old.go", "hash")
+	fileID, err := r.UpsertFileHash(ctx, "ws-1", "old.go", "hash")
+	if err != nil {
+		t.Fatalf("upsert file hash: %v", err)
+	}
 	_ = r.Upsert(ctx, &repo.Symbol{FileID: fileID, WorkspaceID: "ws-1", Name: "Foo", Kind: "function", StartLine: 1, EndLine: 5})
 	_ = r.Upsert(ctx, &repo.Symbol{FileID: fileID, WorkspaceID: "ws-1", Name: "Bar", Kind: "function", StartLine: 10, EndLine: 15})
 

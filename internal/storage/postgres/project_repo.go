@@ -107,7 +107,10 @@ func (r *ProjectRepo) DeleteProjectPlan(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.DeleteProjectPlan: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.DeleteProjectPlan: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("project plan %q not found", id)
 	}
@@ -122,7 +125,10 @@ func (r *ProjectRepo) UpdateProjectStatus(ctx context.Context, id string, status
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.UpdateProjectStatus: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.UpdateProjectStatus: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("project plan %q not found", id)
 	}
@@ -137,7 +143,10 @@ func (r *ProjectRepo) MoveProjectWorkspace(ctx context.Context, id string, targe
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.MoveProjectWorkspace: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.MoveProjectWorkspace: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("project plan %q not found", id)
 	}
@@ -237,7 +246,10 @@ func (r *ProjectRepo) AssignMilestone(ctx context.Context, milestoneID string, a
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.AssignMilestone: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.AssignMilestone: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("milestone %q not found", milestoneID)
 	}
@@ -252,7 +264,10 @@ func (r *ProjectRepo) UnassignMilestone(ctx context.Context, milestoneID string)
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.UnassignMilestone: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.UnassignMilestone: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("milestone %q not found", milestoneID)
 	}
@@ -312,7 +327,10 @@ func (r *ProjectRepo) UpdateTaskStatus(ctx context.Context, id string, status st
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.UpdateTaskStatus: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.UpdateTaskStatus: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("task %q not found", id)
 	}
@@ -383,7 +401,10 @@ func (r *ProjectRepo) AssignTask(ctx context.Context, taskID string, agentID str
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.AssignTask: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.AssignTask: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("task %q not found", taskID)
 	}
@@ -398,7 +419,10 @@ func (r *ProjectRepo) UnassignTask(ctx context.Context, taskID string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.UnassignTask: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.UnassignTask: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("task %q not found", taskID)
 	}
@@ -411,7 +435,10 @@ func (r *ProjectRepo) DeleteMilestone(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.DeleteMilestone: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.DeleteMilestone: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("milestone %q not found", id)
 	}
@@ -424,7 +451,10 @@ func (r *ProjectRepo) DeleteTask(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.ProjectRepo.DeleteTask: %w", err)
 	}
-	rows, _ := result.RowsAffected()
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.ProjectRepo.DeleteTask: %w", err)
+	}
 	if rows == 0 {
 		return fmt.Errorf("task %q not found", id)
 	}
@@ -441,7 +471,10 @@ func (r *ProjectRepo) PurgeOrphans(ctx context.Context) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("postgres.ProjectRepo.PurgeOrphans(tasks): %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("postgres.ProjectRepo.PurgeOrphans(tasks): %w", err)
+	}
 	total += n
 
 	res, err = r.db.ExecContext(ctx,
@@ -449,7 +482,10 @@ func (r *ProjectRepo) PurgeOrphans(ctx context.Context) (int64, error) {
 	if err != nil {
 		return total, fmt.Errorf("postgres.ProjectRepo.PurgeOrphans(milestones): %w", err)
 	}
-	n, _ = res.RowsAffected()
+	n, err = res.RowsAffected()
+	if err != nil {
+		return total, fmt.Errorf("postgres.ProjectRepo.PurgeOrphans(milestones): %w", err)
+	}
 	total += n
 
 	res, err = r.db.ExecContext(ctx,
@@ -460,7 +496,10 @@ func (r *ProjectRepo) PurgeOrphans(ctx context.Context) (int64, error) {
 	if err != nil {
 		return total, fmt.Errorf("postgres.ProjectRepo.PurgeOrphans(comments): %w", err)
 	}
-	n, _ = res.RowsAffected()
+	n, err = res.RowsAffected()
+	if err != nil {
+		return total, fmt.Errorf("postgres.ProjectRepo.PurgeOrphans(comments): %w", err)
+	}
 	total += n
 
 	return total, nil
@@ -477,7 +516,10 @@ func (r *ProjectRepo) ReconcileCompletionStatus(ctx context.Context) (int, int, 
 	if err != nil {
 		return 0, 0, fmt.Errorf("postgres.ProjectRepo.ReconcileCompletionStatus(milestones): %w", err)
 	}
-	msCount, _ := msResult.RowsAffected()
+	msCount, err := msResult.RowsAffected()
+	if err != nil {
+		return 0, 0, fmt.Errorf("postgres.ProjectRepo.ReconcileCompletionStatus(milestones): %w", err)
+	}
 
 	pjResult, err := r.db.ExecContext(ctx, `
 		UPDATE project_plans SET status = 'completed', updated_at = NOW()
@@ -487,7 +529,10 @@ func (r *ProjectRepo) ReconcileCompletionStatus(ctx context.Context) (int, int, 
 	if err != nil {
 		return int(msCount), 0, fmt.Errorf("postgres.ProjectRepo.ReconcileCompletionStatus(projects): %w", err)
 	}
-	pjCount, _ := pjResult.RowsAffected()
+	pjCount, err := pjResult.RowsAffected()
+	if err != nil {
+		return int(msCount), 0, fmt.Errorf("postgres.ProjectRepo.ReconcileCompletionStatus(projects): %w", err)
+	}
 
 	return int(msCount), int(pjCount), nil
 }

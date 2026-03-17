@@ -65,14 +65,19 @@ func (r *TelemetryRepo) GetSession(ctx context.Context, id string) (*types.Sessi
 		return nil, fmt.Errorf("sqlite.TelemetryRepo.GetSession: %w", err)
 	}
 
-	s.StartedAt, _ = time.Parse(sqliteTimeFormat, startedAt)
-	s.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
+	if s.StartedAt, err = parseSQLiteTime(startedAt, "sqlite.TelemetryRepo.GetSession"); err != nil {
+		return nil, err
+	}
+	if s.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.TelemetryRepo.GetSession"); err != nil {
+		return nil, err
+	}
 	if endedAt.Valid {
-		t, err := time.Parse(sqliteTimeFormat, endedAt.String)
-		if err == nil {
-			s.EndedAt = &t
-			s.Duration = t.Sub(s.StartedAt)
+		t, parseErr := parseSQLiteTime(endedAt.String, "sqlite.TelemetryRepo.GetSession.endedAt")
+		if parseErr != nil {
+			return nil, parseErr
 		}
+		s.EndedAt = &t
+		s.Duration = t.Sub(s.StartedAt)
 	}
 
 	return s, nil
@@ -119,14 +124,20 @@ func (r *TelemetryRepo) ListSessions(ctx context.Context, agentID string, limit 
 			return nil, fmt.Errorf("sqlite.TelemetryRepo.ListSessions: %w", err)
 		}
 
-		s.StartedAt, _ = time.Parse(sqliteTimeFormat, startedAt)
-		s.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
+		var parseErr error
+		if s.StartedAt, parseErr = parseSQLiteTime(startedAt, "sqlite.TelemetryRepo.ListSessions"); parseErr != nil {
+			return nil, parseErr
+		}
+		if s.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.TelemetryRepo.ListSessions"); parseErr != nil {
+			return nil, parseErr
+		}
 		if endedAt.Valid {
-			t, err := time.Parse(sqliteTimeFormat, endedAt.String)
-			if err == nil {
-				s.EndedAt = &t
-				s.Duration = t.Sub(s.StartedAt)
+			t, endedErr := parseSQLiteTime(endedAt.String, "sqlite.TelemetryRepo.ListSessions.endedAt")
+			if endedErr != nil {
+				return nil, endedErr
 			}
+			s.EndedAt = &t
+			s.Duration = t.Sub(s.StartedAt)
 		}
 
 		sessions = append(sessions, s)
@@ -238,7 +249,10 @@ func (r *TelemetryRepo) GetSessionMetrics(ctx context.Context, sessionID string)
 			return nil, fmt.Errorf("sqlite.TelemetryRepo.GetSessionMetrics: %w", err)
 		}
 
-		m.StartedAt, _ = time.Parse(sqliteTimeFormat, startedAt)
+		var parseErr error
+		if m.StartedAt, parseErr = parseSQLiteTime(startedAt, "sqlite.TelemetryRepo.GetSessionMetrics"); parseErr != nil {
+			return nil, parseErr
+		}
 		m.Duration = time.Duration(durationMS) * time.Millisecond
 		m.Success = success == 1
 
@@ -422,13 +436,18 @@ func (r *TelemetryRepo) GetAlert(ctx context.Context, id string) (*types.Alert, 
 	}
 
 	a.Enabled = enabled == 1
-	a.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
-	a.UpdatedAt, _ = time.Parse(sqliteTimeFormat, updatedAt)
+	if a.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.TelemetryRepo.GetAlert"); err != nil {
+		return nil, err
+	}
+	if a.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.TelemetryRepo.GetAlert"); err != nil {
+		return nil, err
+	}
 	if lastFiredAt.Valid {
-		t, err := time.Parse(sqliteTimeFormat, lastFiredAt.String)
-		if err == nil {
-			a.LastFiredAt = &t
+		t, parseErr := parseSQLiteTime(lastFiredAt.String, "sqlite.TelemetryRepo.GetAlert.lastFiredAt")
+		if parseErr != nil {
+			return nil, parseErr
 		}
+		a.LastFiredAt = &t
 	}
 
 	return a, nil
@@ -461,13 +480,19 @@ func (r *TelemetryRepo) ListAlerts(ctx context.Context) ([]*types.Alert, error) 
 		}
 
 		a.Enabled = enabled == 1
-		a.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
-		a.UpdatedAt, _ = time.Parse(sqliteTimeFormat, updatedAt)
+		var parseErr error
+		if a.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.TelemetryRepo.ListAlerts"); parseErr != nil {
+			return nil, parseErr
+		}
+		if a.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.TelemetryRepo.ListAlerts"); parseErr != nil {
+			return nil, parseErr
+		}
 		if lastFiredAt.Valid {
-			t, err := time.Parse(sqliteTimeFormat, lastFiredAt.String)
-			if err == nil {
-				a.LastFiredAt = &t
+			t, firedErr := parseSQLiteTime(lastFiredAt.String, "sqlite.TelemetryRepo.ListAlerts.lastFiredAt")
+			if firedErr != nil {
+				return nil, firedErr
 			}
+			a.LastFiredAt = &t
 		}
 
 		alerts = append(alerts, a)

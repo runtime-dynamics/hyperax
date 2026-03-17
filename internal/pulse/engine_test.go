@@ -134,7 +134,10 @@ func TestGetCadence(t *testing.T) {
 
 	// Verify it's a copy by modifying it.
 	got.Name = "modified"
-	original, _ := engine.GetCadence(c.ID)
+	original, err := engine.GetCadence(c.ID)
+	if err != nil {
+		t.Fatalf("GetCadence: %v", err)
+	}
 	if original.Name != "test" {
 		t.Error("GetCadence should return a copy, not a reference")
 	}
@@ -164,7 +167,10 @@ func TestUpdateCadence(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	got, _ := engine.GetCadence(c.ID)
+	got, err := engine.GetCadence(c.ID)
+	if err != nil {
+		t.Fatalf("GetCadence: %v", err)
+	}
 	if got.Name != "updated" {
 		t.Errorf("expected name 'updated', got %q", got.Name)
 	}
@@ -180,15 +186,21 @@ func TestUpdateCadence_PartialUpdate(t *testing.T) {
 	bus := nervous.NewEventBus(64)
 	engine := NewEngine(bus, testLogger())
 
-	c, _ := engine.CreateCadence("original", "@every 10s", types.PriorityStandard, nil)
+	c, err := engine.CreateCadence("original", "@every 10s", types.PriorityStandard, nil)
+	if err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	// Update only the name, leave schedule and priority empty.
-	err := engine.UpdateCadence(c.ID, "renamed", "", "")
+	err = engine.UpdateCadence(c.ID, "renamed", "", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	got, _ := engine.GetCadence(c.ID)
+	got, err := engine.GetCadence(c.ID)
+	if err != nil {
+		t.Fatalf("GetCadence: %v", err)
+	}
 	if got.Name != "renamed" {
 		t.Errorf("expected name 'renamed', got %q", got.Name)
 	}
@@ -214,9 +226,12 @@ func TestDeleteCadence(t *testing.T) {
 	bus := nervous.NewEventBus(64)
 	engine := NewEngine(bus, testLogger())
 
-	c, _ := engine.CreateCadence("doomed", "@every 10s", types.PriorityStandard, nil)
+	c, err := engine.CreateCadence("doomed", "@every 10s", types.PriorityStandard, nil)
+	if err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
-	err := engine.DeleteCadence(c.ID)
+	err = engine.DeleteCadence(c.ID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -248,8 +263,12 @@ func TestListCadences(t *testing.T) {
 	}
 
 	// Add two cadences.
-	_, _ = engine.CreateCadence("a", "@every 10s", types.PriorityStandard, nil)
-	_, _ = engine.CreateCadence("b", "@every 20s", types.PriorityBackground, nil)
+	if _, err := engine.CreateCadence("a", "@every 10s", types.PriorityStandard, nil); err != nil {
+		t.Fatalf("CreateCadence a: %v", err)
+	}
+	if _, err := engine.CreateCadence("b", "@every 20s", types.PriorityBackground, nil); err != nil {
+		t.Fatalf("CreateCadence b: %v", err)
+	}
 
 	cadences = engine.ListCadences()
 	if len(cadences) != 2 {
@@ -267,7 +286,10 @@ func TestProcessTick_FiresDueCadence(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	c, _ := engine.CreateCadence("tick-test", "@every 5s", types.PriorityStandard, nil)
+	c, err := engine.CreateCadence("tick-test", "@every 5s", types.PriorityStandard, nil)
+	if err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	// Collect pulse.fire events.
 	get, cancel := collectEvents(bus, types.EventPulseFire)
@@ -302,7 +324,9 @@ func TestProcessTick_SkipsNotYetDue(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	_, _ = engine.CreateCadence("future", "@every 1h", types.PriorityStandard, nil)
+	if _, err := engine.CreateCadence("future", "@every 1h", types.PriorityStandard, nil); err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	get, cancel := collectEvents(bus, types.EventPulseFire)
 	defer cancel()
@@ -326,14 +350,20 @@ func TestProcessTick_UpdatesNextFire(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	c, _ := engine.CreateCadence("recur", "@every 10s", types.PriorityStandard, nil)
+	c, err := engine.CreateCadence("recur", "@every 10s", types.PriorityStandard, nil)
+	if err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 	originalNext := *c.NextFire
 
 	// Advance past the first fire.
 	engine.nowFunc = func() time.Time { return now.Add(15 * time.Second) }
 	engine.processTick()
 
-	got, _ := engine.GetCadence(c.ID)
+	got, err := engine.GetCadence(c.ID)
+	if err != nil {
+		t.Fatalf("GetCadence: %v", err)
+	}
 	if got.NextFire == nil {
 		t.Fatal("expected NextFire to be set after fire")
 	}
@@ -351,7 +381,10 @@ func TestProcessTick_SingleflightSkipsRunning(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	c, _ := engine.CreateCadence("singleflight", "@every 5s", types.PriorityStandard, nil)
+	c, err := engine.CreateCadence("singleflight", "@every 5s", types.PriorityStandard, nil)
+	if err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	// Manually mark as running to simulate an in-flight invocation.
 	engine.mu.Lock()
@@ -373,7 +406,9 @@ func TestProcessTick_SingleflightSkipsRunning(t *testing.T) {
 	}
 
 	var payload map[string]string
-	_ = json.Unmarshal(events[0].Payload, &payload)
+	if err := json.Unmarshal(events[0].Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
 	if payload["reason"] == "" {
 		t.Error("expected non-empty reason in skipped event payload")
 	}
@@ -388,7 +423,9 @@ func TestProcessTick_BackpressureDefersBackground(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	_, _ = engine.CreateCadence("bg-task", "@every 5s", types.PriorityBackground, nil)
+	if _, err := engine.CreateCadence("bg-task", "@every 5s", types.PriorityBackground, nil); err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	// Activate backpressure.
 	engine.Backpressure().SetBackpressure(true)
@@ -422,7 +459,9 @@ func TestProcessTick_BackpressureDoesNotDeferUrgent(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	_, _ = engine.CreateCadence("urgent-task", "@every 5s", types.PriorityUrgent, nil)
+	if _, err := engine.CreateCadence("urgent-task", "@every 5s", types.PriorityUrgent, nil); err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	// Activate backpressure.
 	engine.Backpressure().SetBackpressure(true)
@@ -448,7 +487,9 @@ func TestProcessTick_BackpressureDoesNotDeferStandard(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	_, _ = engine.CreateCadence("std-task", "@every 5s", types.PriorityStandard, nil)
+	if _, err := engine.CreateCadence("std-task", "@every 5s", types.PriorityStandard, nil); err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	engine.Backpressure().SetBackpressure(true)
 
@@ -496,8 +537,12 @@ func TestGetStatus(t *testing.T) {
 	bus := nervous.NewEventBus(64)
 	engine := NewEngine(bus, testLogger())
 
-	_, _ = engine.CreateCadence("a", "@every 10s", types.PriorityStandard, nil)
-	_, _ = engine.CreateCadence("b", "@every 20s", types.PriorityBackground, nil)
+	if _, err := engine.CreateCadence("a", "@every 10s", types.PriorityStandard, nil); err != nil {
+		t.Fatalf("CreateCadence a: %v", err)
+	}
+	if _, err := engine.CreateCadence("b", "@every 20s", types.PriorityBackground, nil); err != nil {
+		t.Fatalf("CreateCadence b: %v", err)
+	}
 
 	status := engine.GetStatus()
 
@@ -578,7 +623,9 @@ func TestRun_FiresCadencesOnSchedule(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	_, _ = engine.CreateCadence("fast", "@every 1s", types.PriorityStandard, nil)
+	if _, err := engine.CreateCadence("fast", "@every 1s", types.PriorityStandard, nil); err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	// Now advance time so the cadence is immediately due on every tick.
 	engine.nowFunc = func() time.Time { return now.Add(5 * time.Second) }
@@ -612,7 +659,10 @@ func TestCreateCadence_WithPayload(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	got, _ := engine.GetCadence(c.ID)
+	got, err := engine.GetCadence(c.ID)
+	if err != nil {
+		t.Fatalf("GetCadence: %v", err)
+	}
 	// Payload is stored as-is (any type).
 	p, ok := got.Payload.(map[string]string)
 	if !ok {
@@ -652,7 +702,10 @@ func TestProcessTick_SkipsDisabledCadence(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	engine.nowFunc = func() time.Time { return now }
 
-	c, _ := engine.CreateCadence("disabled", "@every 5s", types.PriorityStandard, nil)
+	c, err := engine.CreateCadence("disabled", "@every 5s", types.PriorityStandard, nil)
+	if err != nil {
+		t.Fatalf("CreateCadence: %v", err)
+	}
 
 	// Disable the cadence.
 	engine.mu.Lock()

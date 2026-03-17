@@ -241,12 +241,15 @@ func BuildRouter(application *app.HyperaxApp, uiFS fs.FS, sqlDB *sql.DB) http.Ha
 	// Pulse Engine wiring (agent order sender routes through CommHub)
 	if application.PulseEngine != nil {
 		application.PulseEngine.SetAgentOrderSender(func(ctx context.Context, targetAgent, cadenceName, cadenceID string, payload any) error {
-			payloadJSON, _ := json.Marshal(map[string]any{
+			payloadJSON, err := json.Marshal(map[string]any{
 				"type":         "agent_order",
 				"cadence_id":   cadenceID,
 				"cadence_name": cadenceName,
 				"payload":      payload,
 			})
+			if err != nil {
+				return fmt.Errorf("marshal agent order payload: %w", err)
+			}
 			env := &types.MessageEnvelope{
 				ID:          "cadence-" + cadenceID,
 				From:        "system:pulse",

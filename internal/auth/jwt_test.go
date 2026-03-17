@@ -412,7 +412,10 @@ func TestHandleTokenEndpoint_Success(t *testing.T) {
 
 	handler := HandleTokenEndpoint(ti, validator, testLogger())
 
-	body, _ := json.Marshal(TokenRequest{MCPToken: "valid-mcp-token"})
+	body, err := json.Marshal(TokenRequest{MCPToken: "valid-mcp-token"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	r := httptest.NewRequest(http.MethodPost, "/auth/token", bytes.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -450,7 +453,10 @@ func TestHandleTokenEndpoint_InvalidMCPToken(t *testing.T) {
 
 	handler := HandleTokenEndpoint(ti, validator, testLogger())
 
-	body, _ := json.Marshal(TokenRequest{MCPToken: "bad-token"})
+	body, err := json.Marshal(TokenRequest{MCPToken: "bad-token"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	r := httptest.NewRequest(http.MethodPost, "/auth/token", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -467,7 +473,10 @@ func TestHandleTokenEndpoint_MissingMCPToken(t *testing.T) {
 
 	handler := HandleTokenEndpoint(ti, validator, testLogger())
 
-	body, _ := json.Marshal(TokenRequest{})
+	body, err := json.Marshal(TokenRequest{})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	r := httptest.NewRequest(http.MethodPost, "/auth/token", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -483,7 +492,10 @@ func TestHandleTokenEndpoint_ValidatorNil(t *testing.T) {
 
 	handler := HandleTokenEndpoint(ti, nil, testLogger())
 
-	body, _ := json.Marshal(TokenRequest{MCPToken: "any"})
+	body, err := json.Marshal(TokenRequest{MCPToken: "any"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
 	r := httptest.NewRequest(http.MethodPost, "/auth/token", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 

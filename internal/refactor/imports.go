@@ -29,7 +29,10 @@ func EnsureImports(filePath string, imports []string) error {
 	// Collect existing import paths into a set for O(1) lookup.
 	existing := make(map[string]bool)
 	for _, imp := range astFile.Imports {
-		path, _ := strconv.Unquote(imp.Path.Value)
+		path, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			continue // skip malformed import path
+		}
 		existing[path] = true
 	}
 
@@ -80,7 +83,12 @@ func RemoveUnusedImports(filePath string) error {
 		var kept []ast.Spec
 		for _, spec := range genDecl.Specs {
 			impSpec := spec.(*ast.ImportSpec)
-			name := importLocalName(impSpec)
+			name, err := importLocalName(impSpec)
+			if err != nil {
+				// Keep imports with unparseable paths to avoid accidental removal.
+				kept = append(kept, spec)
+				continue
+			}
 
 			// Blank imports (_) and dot imports (.) are always kept.
 			if name == "_" || name == "." {
@@ -180,13 +188,17 @@ func addImportToAST(file *ast.File, spec importSpec) {
 
 // importLocalName returns the local name by which an import is referenced:
 // the explicit alias if present, otherwise the last element of the path.
-func importLocalName(spec *ast.ImportSpec) string {
+// Returns an error if the import path cannot be unquoted.
+func importLocalName(spec *ast.ImportSpec) (string, error) {
 	if spec.Name != nil {
-		return spec.Name.Name
+		return spec.Name.Name, nil
 	}
-	path, _ := strconv.Unquote(spec.Path.Value)
+	path, err := strconv.Unquote(spec.Path.Value)
+	if err != nil {
+		return "", fmt.Errorf("unquote import path %s: %w", spec.Path.Value, err)
+	}
 	parts := strings.Split(path, "/")
-	return parts[len(parts)-1]
+	return parts[len(parts)-1], nil
 }
 
 // collectUsedIdents walks the AST and returns a set of all identifier names

@@ -86,15 +86,25 @@ func (r *CronRepo) GetJob(ctx context.Context, id string) (*repo.CronJob, error)
 		job.LastStatus = lastStatus.String
 	}
 	if nextRunAt.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", nextRunAt.String)
+		t, parseErr := parseSQLiteTime(nextRunAt.String, "sqlite.CronRepo.GetJob.nextRunAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		job.NextRunAt = &t
 	}
 	if lastRunAt.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", lastRunAt.String)
+		t, parseErr := parseSQLiteTime(lastRunAt.String, "sqlite.CronRepo.GetJob.lastRunAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		job.LastRunAt = &t
 	}
-	job.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	job.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if job.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.CronRepo.GetJob"); err != nil {
+		return nil, err
+	}
+	if job.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.CronRepo.GetJob"); err != nil {
+		return nil, err
+	}
 
 	return job, nil
 }
@@ -134,16 +144,27 @@ func (r *CronRepo) ListJobs(ctx context.Context) ([]*repo.CronJob, error) {
 		if lastStatus.Valid {
 			job.LastStatus = lastStatus.String
 		}
+		var parseErr error
 		if nextRunAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", nextRunAt.String)
+			t, pErr := parseSQLiteTime(nextRunAt.String, "sqlite.CronRepo.ListJobs.nextRunAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			job.NextRunAt = &t
 		}
 		if lastRunAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", lastRunAt.String)
+			t, pErr := parseSQLiteTime(lastRunAt.String, "sqlite.CronRepo.ListJobs.lastRunAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			job.LastRunAt = &t
 		}
-		job.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		job.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		if job.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.CronRepo.ListJobs"); parseErr != nil {
+			return nil, parseErr
+		}
+		if job.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.CronRepo.ListJobs"); parseErr != nil {
+			return nil, parseErr
+		}
 
 		jobs = append(jobs, job)
 	}
@@ -258,16 +279,27 @@ func (r *CronRepo) GetDueJobs(ctx context.Context, now time.Time) ([]*repo.CronJ
 		if lastStatus.Valid {
 			job.LastStatus = lastStatus.String
 		}
+		var parseErr error
 		if nextRunAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", nextRunAt.String)
+			t, pErr := parseSQLiteTime(nextRunAt.String, "sqlite.CronRepo.GetDueJobs.nextRunAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			job.NextRunAt = &t
 		}
 		if lastRunAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", lastRunAt.String)
+			t, pErr := parseSQLiteTime(lastRunAt.String, "sqlite.CronRepo.GetDueJobs.lastRunAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			job.LastRunAt = &t
 		}
-		job.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		job.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		if job.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.CronRepo.GetDueJobs"); parseErr != nil {
+			return nil, parseErr
+		}
+		if job.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.CronRepo.GetDueJobs"); parseErr != nil {
+			return nil, parseErr
+		}
 
 		jobs = append(jobs, job)
 	}
@@ -372,9 +404,15 @@ func (r *CronRepo) GetHistory(ctx context.Context, jobID string, limit int) ([]*
 			return nil, fmt.Errorf("sqlite.CronRepo.GetHistory: %w", err)
 		}
 
-		e.StartedAt, _ = time.Parse("2006-01-02 15:04:05", startedAt)
+		var parseErr error
+		if e.StartedAt, parseErr = parseSQLiteTime(startedAt, "sqlite.CronRepo.GetHistory"); parseErr != nil {
+			return nil, parseErr
+		}
 		if finishedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", finishedAt.String)
+			t, pErr := parseSQLiteTime(finishedAt.String, "sqlite.CronRepo.GetHistory.finishedAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			e.FinishedAt = &t
 		}
 
@@ -460,7 +498,10 @@ func (r *CronRepo) ListDLQ(ctx context.Context) ([]*repo.CronDLQEntry, error) {
 			return nil, fmt.Errorf("sqlite.CronRepo.ListDLQ: %w", err)
 		}
 
-		e.FailedAt, _ = time.Parse("2006-01-02 15:04:05", failedAt)
+		var parseErr error
+		if e.FailedAt, parseErr = parseSQLiteTime(failedAt, "sqlite.CronRepo.ListDLQ"); parseErr != nil {
+			return nil, parseErr
+		}
 		e.Payload = json.RawMessage(payload)
 
 		entries = append(entries, e)

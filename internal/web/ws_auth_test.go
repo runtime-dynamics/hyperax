@@ -55,7 +55,11 @@ func TestWSUpgrade_NoAuth_JWTDisabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() {
+		if cerr := conn.Close(); cerr != nil {
+			t.Logf("cleanup: failed to close websocket: %v", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusSwitchingProtocols)
@@ -127,7 +131,11 @@ func TestWSUpgrade_ValidJWT_QueryParam(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() {
+		if cerr := conn.Close(); cerr != nil {
+			t.Logf("cleanup: failed to close websocket: %v", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusSwitchingProtocols)
@@ -160,7 +168,11 @@ func TestWSUpgrade_ValidJWT_AuthHeader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}
-	defer func() { _ = conn.Close() }()
+	defer func() {
+		if cerr := conn.Close(); cerr != nil {
+			t.Logf("cleanup: failed to close websocket: %v", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusSwitchingProtocols)

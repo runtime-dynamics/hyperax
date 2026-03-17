@@ -85,14 +85,16 @@ func (r *Registry) SetConfigRepo(cr repo.ConfigRepo) {
 
 	// Ensure the config key metadata exists so FK constraints are satisfied.
 	if cr != nil {
-		_ = cr.UpsertKeyMeta(context.Background(), &types.ConfigKeyMeta{
+		if err := cr.UpsertKeyMeta(context.Background(), &types.ConfigKeyMeta{
 			Key:         configKeySecretsProvider,
 			ScopeType:   "global",
 			ValueType:   "string",
 			DefaultVal:  "local",
 			Critical:    true,
 			Description: "Active secret provider (local is built-in; others registered via plugins)",
-		})
+		}); err != nil {
+			slog.Warn("failed to upsert secrets provider config key metadata", "error", err)
+		}
 	}
 }
 
@@ -153,7 +155,9 @@ func (r *Registry) Unregister(name string) bool {
 		// Persist the fallback so it survives restarts.
 		if r.configRepo != nil {
 			scope := types.ConfigScope{Type: "global"}
-			_ = r.configRepo.SetValue(context.Background(), configKeySecretsProvider, "local", scope, "system")
+			if err := r.configRepo.SetValue(context.Background(), configKeySecretsProvider, "local", scope, "system"); err != nil {
+				slog.Warn("failed to persist secret provider fallback to local", "error", err)
+			}
 		}
 	}
 	return true

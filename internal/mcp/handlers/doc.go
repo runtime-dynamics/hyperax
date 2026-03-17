@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -322,7 +323,7 @@ func (h *DocHandler) listDocs(ctx context.Context, params json.RawMessage) (*typ
 		sources, extErr := h.store.ExternalDocs.ListExternalDocSources(ctx, ws.ID)
 		if extErr == nil {
 			for _, src := range sources {
-				_ = filepath.WalkDir(src.Path, func(path string, d os.DirEntry, walkErr error) error {
+				if walkDirErr := filepath.WalkDir(src.Path, func(path string, d os.DirEntry, walkErr error) error {
 					if walkErr != nil || d.IsDir() {
 						return nil
 					}
@@ -345,7 +346,9 @@ func (h *DocHandler) listDocs(ctx context.Context, params json.RawMessage) (*typ
 						Readonly: true,
 					})
 					return nil
-				})
+				}); walkDirErr != nil {
+					slog.Warn("failed to walk external doc source", "path", src.Path, "error", walkDirErr)
+				}
 			}
 		}
 	}
@@ -408,7 +411,11 @@ func (h *DocHandler) getDocContent(ctx context.Context, params json.RawMessage) 
 		}
 		return types.NewErrorResult(fmt.Sprintf("open file: %v", err)), nil
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	var sb strings.Builder
 	scanner := bufio.NewScanner(f)
@@ -1834,7 +1841,10 @@ func (h *DocHandler) updateSpecStatus(ctx context.Context, params json.RawMessag
 			if projectStatus == "approved" {
 				projectStatus = "pending"
 			}
-			_ = projects.UpdateProjectStatus(ctx, spec.ProjectID, projectStatus)
+			if updateErr := projects.UpdateProjectStatus(ctx, spec.ProjectID, projectStatus); updateErr != nil {
+				slog.Warn("failed to update project status after spec status change",
+					"project_id", spec.ProjectID, "status", projectStatus, "error", updateErr)
+			}
 		}
 	}
 
@@ -1904,7 +1914,11 @@ func docExtractHeadings(path string) ([]docHeading, error) {
 		}
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	var headings []docHeading
 	scanner := bufio.NewScanner(f)
@@ -1960,7 +1974,11 @@ func docExtractSection(path, section string) (string, error) {
 		}
 		return "", fmt.Errorf("open file: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	scanner := bufio.NewScanner(f)
 	inCodeBlock := false
@@ -2164,7 +2182,10 @@ func (h *DocHandler) cleanupIndexedChunks(ctx context.Context, workspaceID, sour
 	})
 
 	if walkErr != nil {
-		_ = h.store.Search.DeleteDocChunksByPath(ctx, workspaceID, prefix)
+		if delErr := h.store.Search.DeleteDocChunksByPath(ctx, workspaceID, prefix); delErr != nil {
+			slog.Warn("failed to delete doc chunks by prefix after walk error",
+				"workspace_id", workspaceID, "prefix", prefix, "error", delErr)
+		}
 	}
 
 	return cleaned

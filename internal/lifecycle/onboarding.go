@@ -320,10 +320,13 @@ func (o *Onboarder) stepContextHydration(ctx context.Context, agentID, personaID
 
 	// Package memories as a TrustInternal envelope and deliver.
 	if o.deps.Hub != nil {
-		payload, _ := json.Marshal(map[string]any{
+		payload, err := json.Marshal(map[string]any{
 			"type":     "context_hydration",
 			"memories": allMemories,
 		})
+		if err != nil {
+			return len(allMemories), fmt.Errorf("lifecycle.Onboarder.stepContextHydration: marshal payload: %w", err)
+		}
 		env := &types.MessageEnvelope{
 			From:        "system",
 			To:          agentID,
@@ -359,10 +362,13 @@ func (o *Onboarder) stepTaskAssignment(ctx context.Context, agentID, personaID s
 
 	// Deliver task list to agent inbox.
 	if o.deps.Hub != nil {
-		payload, _ := json.Marshal(map[string]any{
+		payload, err := json.Marshal(map[string]any{
 			"type":  "task_assignment",
 			"tasks": tasks,
 		})
+		if err != nil {
+			return len(tasks), fmt.Errorf("lifecycle.Onboarder.stepTaskAssignment: marshal payload: %w", err)
+		}
 		env := &types.MessageEnvelope{
 			From:        "system",
 			To:          agentID,

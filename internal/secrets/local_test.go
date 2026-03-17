@@ -132,7 +132,9 @@ func TestLocalProvider_Delete(t *testing.T) {
 	ctx := context.Background()
 	p := NewLocalProvider(newFakeSecretRepo())
 
-	_ = p.Set(ctx, "key1", "val1", "global")
+	if err := p.Set(ctx, "key1", "val1", "global"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
 	if err := p.Delete(ctx, "key1", "global"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
@@ -157,9 +159,15 @@ func TestLocalProvider_List(t *testing.T) {
 	ctx := context.Background()
 	p := NewLocalProvider(newFakeSecretRepo())
 
-	_ = p.Set(ctx, "a", "1", "global")
-	_ = p.Set(ctx, "b", "2", "global")
-	_ = p.Set(ctx, "c", "3", "workspace")
+	if err := p.Set(ctx, "a", "1", "global"); err != nil {
+		t.Fatalf("Set a: %v", err)
+	}
+	if err := p.Set(ctx, "b", "2", "global"); err != nil {
+		t.Fatalf("Set b: %v", err)
+	}
+	if err := p.Set(ctx, "c", "3", "workspace"); err != nil {
+		t.Fatalf("Set c: %v", err)
+	}
 
 	keys, err := p.List(ctx, "global")
 	if err != nil {
@@ -174,7 +182,9 @@ func TestLocalProvider_Rotate(t *testing.T) {
 	ctx := context.Background()
 	p := NewLocalProvider(newFakeSecretRepo())
 
-	_ = p.Set(ctx, "token", "old_value", "global")
+	if err := p.Set(ctx, "token", "old_value", "global"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
 
 	old, err := p.Rotate(ctx, "token", "new_value", "global")
 	if err != nil {
@@ -184,7 +194,10 @@ func TestLocalProvider_Rotate(t *testing.T) {
 		t.Fatalf("expected old_value, got %s", old)
 	}
 
-	val, _ := p.Get(ctx, "token", "global")
+	val, err := p.Get(ctx, "token", "global")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
 	if val != "new_value" {
 		t.Fatalf("expected new_value after rotate, got %s", val)
 	}
@@ -226,7 +239,9 @@ func TestLocalProvider_RotateRollbackOnSetFailure(t *testing.T) {
 	p := NewLocalProvider(fr)
 
 	// Seed a secret.
-	_ = p.Set(ctx, "token", "original", "global")
+	if err := p.Set(ctx, "token", "original", "global"); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
 
 	// Make Set fail for the rotation attempt.
 	fr.failSet = true
@@ -240,7 +255,10 @@ func TestLocalProvider_RotateRollbackOnSetFailure(t *testing.T) {
 	// only affects the first Set call in Rotate — the rollback Set also
 	// fails, but the original value was never overwritten).
 	fr.failSet = false
-	val, _ := p.Get(ctx, "token", "global")
+	val, err := p.Get(ctx, "token", "global")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
 	if val != "original" {
 		t.Fatalf("expected original value preserved after rollback, got %s", val)
 	}

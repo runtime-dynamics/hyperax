@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/hyperax/hyperax/pkg/types"
 	"golang.org/x/crypto/bcrypt"
@@ -156,7 +155,7 @@ func (r *TokenRepo) GetByID(ctx context.Context, tokenID string) (*types.MCPToke
 	}
 
 	if err := json.Unmarshal([]byte(scopesRaw), &t.Scopes); err != nil {
-		slog.Error("failed to unmarshal token scopes from database", "error", err)
+		return nil, fmt.Errorf("mysql.TokenRepo: unmarshal scopes: %w", err)
 	}
 	if expiresAt.Valid {
 		t.ExpiresAt = &expiresAt.Time
@@ -184,7 +183,7 @@ func scanMyToken(rows *sql.Rows) (*types.MCPToken, error) {
 	}
 
 	if err := json.Unmarshal([]byte(scopesRaw), &t.Scopes); err != nil {
-		slog.Error("failed to unmarshal token scopes from database", "error", err)
+		return nil, fmt.Errorf("mysql.TokenRepo: unmarshal scopes: %w", err)
 	}
 	if expiresAt.Valid {
 		t.ExpiresAt = &expiresAt.Time

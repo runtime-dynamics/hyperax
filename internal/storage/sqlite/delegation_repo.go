@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/hyperax/hyperax/internal/repo"
 	"github.com/hyperax/hyperax/pkg/types"
@@ -156,7 +155,7 @@ func scanDelegation(row *sql.Row) (*types.Delegation, error) {
 	}
 	if scopesJSON.Valid && scopesJSON.String != "" {
 		if err := json.Unmarshal([]byte(scopesJSON.String), &d.Scopes); err != nil {
-			slog.Error("failed to unmarshal delegation scopes from database", "error", err)
+			return nil, fmt.Errorf("sqlite.scanDelegation: unmarshal scopes: %w", err)
 		}
 	}
 	if expiresAt.Valid {
@@ -190,8 +189,8 @@ func scanDelegations(rows *sql.Rows) ([]*types.Delegation, error) {
 		}
 		if scopesJSON.Valid && scopesJSON.String != "" {
 			if err := json.Unmarshal([]byte(scopesJSON.String), &d.Scopes); err != nil {
-			slog.Error("failed to unmarshal delegation scopes from database", "error", err)
-		}
+				return nil, fmt.Errorf("sqlite.scanDelegations: unmarshal scopes: %w", err)
+			}
 		}
 		if expiresAt.Valid {
 			d.ExpiresAt = expiresAt.String

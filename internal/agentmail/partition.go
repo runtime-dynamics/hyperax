@@ -136,7 +136,10 @@ func (pm *PartitionManager) IsLocked(workspaceID string) bool {
 	// Check expiry.
 	if time.Now().After(lock.ExpiresAt) {
 		// Auto-release expired locks.
-		_ = pm.ReleaseLock(workspaceID)
+		if err := pm.ReleaseLock(workspaceID); err != nil {
+			pm.logger.Debug("auto-release expired lock failed (likely already released)",
+				"workspace_id", workspaceID, "error", err)
+		}
 		return false
 	}
 
@@ -154,7 +157,10 @@ func (pm *PartitionManager) GetLock(workspaceID string) *types.PartitionLock {
 	}
 
 	if time.Now().After(lock.ExpiresAt) {
-		_ = pm.ReleaseLock(workspaceID)
+		if err := pm.ReleaseLock(workspaceID); err != nil {
+			pm.logger.Debug("auto-release expired lock failed (likely already released)",
+				"workspace_id", workspaceID, "error", err)
+		}
 		return nil
 	}
 

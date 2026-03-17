@@ -84,17 +84,21 @@ func (t *SessionTracker) StartSession(ctx context.Context, agentID string, metad
 
 	// Publish session start event.
 	if t.bus != nil {
-		payload, _ := json.Marshal(map[string]string{
+		payload, err := json.Marshal(map[string]string{
 			"session_id": id,
 			"agent_id":   agentID,
 		})
-		t.bus.Publish(types.NervousEvent{
-			Type:      types.EventTelemetrySessionStart,
-			Source:    "telemetry.session_tracker",
-			Scope:     agentID,
-			Payload:   payload,
-			Timestamp: time.Now(),
-		})
+		if err != nil {
+			t.logger.Error("StartSession: failed to marshal event payload", "session_id", id, "error", err)
+		} else {
+			t.bus.Publish(types.NervousEvent{
+				Type:      types.EventTelemetrySessionStart,
+				Source:    "telemetry.session_tracker",
+				Scope:     agentID,
+				Payload:   payload,
+				Timestamp: time.Now(),
+			})
+		}
 	}
 
 	return id, nil
@@ -120,17 +124,21 @@ func (t *SessionTracker) EndSession(ctx context.Context, sessionID string) error
 
 	// Publish session end event.
 	if t.bus != nil {
-		payload, _ := json.Marshal(map[string]string{
+		payload, err := json.Marshal(map[string]string{
 			"session_id": sessionID,
 			"agent_id":   agentID,
 		})
-		t.bus.Publish(types.NervousEvent{
-			Type:      types.EventTelemetrySessionEnd,
-			Source:    "telemetry.session_tracker",
-			Scope:     agentID,
-			Payload:   payload,
-			Timestamp: time.Now(),
-		})
+		if err != nil {
+			t.logger.Error("EndSession: failed to marshal event payload", "session_id", sessionID, "error", err)
+		} else {
+			t.bus.Publish(types.NervousEvent{
+				Type:      types.EventTelemetrySessionEnd,
+				Source:    "telemetry.session_tracker",
+				Scope:     agentID,
+				Payload:   payload,
+				Timestamp: time.Now(),
+			})
+		}
 	}
 
 	return nil
@@ -165,19 +173,23 @@ func (t *SessionTracker) RecordToolCall(ctx context.Context, sessionID string, m
 
 	// Publish tool call event.
 	if t.bus != nil {
-		payload, _ := json.Marshal(map[string]interface{}{
-			"session_id": sessionID,
-			"tool_name":  metric.ToolName,
+		payload, err := json.Marshal(map[string]interface{}{
+			"session_id":  sessionID,
+			"tool_name":   metric.ToolName,
 			"duration_ms": metric.Duration.Milliseconds(),
-			"success":    metric.Success,
-			"cost":       metric.Cost,
+			"success":     metric.Success,
+			"cost":        metric.Cost,
 		})
-		t.bus.Publish(types.NervousEvent{
-			Type:      types.EventTelemetryToolCall,
-			Source:    "telemetry.session_tracker",
-			Payload:   payload,
-			Timestamp: time.Now(),
-		})
+		if err != nil {
+			t.logger.Error("RecordToolCall: failed to marshal event payload", "session_id", sessionID, "error", err)
+		} else {
+			t.bus.Publish(types.NervousEvent{
+				Type:      types.EventTelemetryToolCall,
+				Source:    "telemetry.session_tracker",
+				Payload:   payload,
+				Timestamp: time.Now(),
+			})
+		}
 	}
 
 	return nil

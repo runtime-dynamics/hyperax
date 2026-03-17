@@ -89,7 +89,7 @@ func TestDiscordAdapter_Send(t *testing.T) {
 		}
 		if strings.HasSuffix(r.URL.Path, "/messages") && r.Method == http.MethodPost {
 			receivedAuth = r.Header.Get("Authorization")
-			receivedBody, _ = io.ReadAll(r.Body)
+			receivedBody, _ = io.ReadAll(r.Body) //nolint:errcheck // test mock server
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]string{"id": "msg-001"})
 			return
@@ -107,8 +107,10 @@ func TestDiscordAdapter_Send(t *testing.T) {
 		BotTokenRef:      "secret:discord_token",
 		DefaultChannelID: "CH001",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	mail := &types.AgentMail{
 		ID:       "discord-send-001",
@@ -151,7 +153,7 @@ func TestDiscordAdapter_Send_APIError(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte(`{"message":"Missing Permissions"}`))
+		_, _ = w.Write([]byte(`{"message":"Missing Permissions"}`)) //nolint:errcheck // test mock server
 	}))
 	defer srv.Close()
 
@@ -164,8 +166,10 @@ func TestDiscordAdapter_Send_APIError(t *testing.T) {
 		BotTokenRef:      "secret:discord_token",
 		DefaultChannelID: "CH001",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	err := a.Send(context.Background(), &types.AgentMail{
 		ID: "err", From: "a", To: "b", Priority: types.MailPriorityStandard, SentAt: time.Now(),
@@ -206,8 +210,10 @@ func TestDiscordAdapter_Receive(t *testing.T) {
 		BotTokenRef:      "secret:discord_token",
 		DefaultChannelID: "CH001",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	msgs, err := a.Receive(context.Background())
 	if err != nil {
@@ -244,8 +250,10 @@ func TestDiscordAdapter_Receive_Empty(t *testing.T) {
 		BotTokenRef:      "secret:discord_token",
 		DefaultChannelID: "CH001",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	msgs, err := a.Receive(context.Background())
 	if err != nil {

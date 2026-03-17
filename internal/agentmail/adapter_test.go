@@ -83,7 +83,9 @@ func TestAdapterRegistry_RegisterAndList(t *testing.T) {
 func TestAdapterRegistry_Get(t *testing.T) {
 	reg := NewAdapterRegistry(testLogger())
 	a := &stubAdapter{name: "test", healthy: true}
-	_ = reg.Register(a)
+	if err := reg.Register(a); err != nil {
+		t.Fatalf("register: %v", err)
+	}
 
 	got := reg.Get("test")
 	if got == nil {
@@ -101,7 +103,9 @@ func TestAdapterRegistry_Get(t *testing.T) {
 func TestAdapterRegistry_Deregister(t *testing.T) {
 	reg := NewAdapterRegistry(testLogger())
 	a := &stubAdapter{name: "test", healthy: true}
-	_ = reg.Register(a)
+	if err := reg.Register(a); err != nil {
+		t.Fatalf("register: %v", err)
+	}
 
 	if err := reg.Deregister("test"); err != nil {
 		t.Fatalf("deregister: %v", err)
@@ -125,8 +129,12 @@ func TestAdapterRegistry_ReplaceExisting(t *testing.T) {
 	a1 := &stubAdapter{name: "test", healthy: true}
 	a2 := &stubAdapter{name: "test", healthy: false}
 
-	_ = reg.Register(a1)
-	_ = reg.Register(a2)
+	if err := reg.Register(a1); err != nil {
+		t.Fatalf("register a1: %v", err)
+	}
+	if err := reg.Register(a2); err != nil {
+		t.Fatalf("register a2: %v", err)
+	}
 
 	if !a1.stopped.Load() {
 		t.Fatal("expected original adapter to be stopped on replace")
@@ -140,8 +148,12 @@ func TestAdapterRegistry_ReplaceExisting(t *testing.T) {
 
 func TestAdapterRegistry_Healthy(t *testing.T) {
 	reg := NewAdapterRegistry(testLogger())
-	_ = reg.Register(&stubAdapter{name: "ok", healthy: true})
-	_ = reg.Register(&stubAdapter{name: "bad", healthy: false})
+	if err := reg.Register(&stubAdapter{name: "ok", healthy: true}); err != nil {
+		t.Fatalf("register ok: %v", err)
+	}
+	if err := reg.Register(&stubAdapter{name: "bad", healthy: false}); err != nil {
+		t.Fatalf("register bad: %v", err)
+	}
 
 	health := reg.Healthy()
 	if !health["ok"] {
@@ -155,7 +167,9 @@ func TestAdapterRegistry_Healthy(t *testing.T) {
 func TestAdapterRegistry_StartAll(t *testing.T) {
 	reg := NewAdapterRegistry(testLogger())
 	a := &stubAdapter{name: "test", healthy: true}
-	_ = reg.Register(a)
+	if err := reg.Register(a); err != nil {
+		t.Fatalf("register: %v", err)
+	}
 
 	reg.StartAll(context.Background())
 
@@ -168,8 +182,12 @@ func TestAdapterRegistry_StopAll(t *testing.T) {
 	reg := NewAdapterRegistry(testLogger())
 	a1 := &stubAdapter{name: "a", healthy: true}
 	a2 := &stubAdapter{name: "b", healthy: true}
-	_ = reg.Register(a1)
-	_ = reg.Register(a2)
+	if err := reg.Register(a1); err != nil {
+		t.Fatalf("register a1: %v", err)
+	}
+	if err := reg.Register(a2); err != nil {
+		t.Fatalf("register a2: %v", err)
+	}
 
 	reg.StopAll()
 

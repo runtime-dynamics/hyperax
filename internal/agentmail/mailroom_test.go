@@ -41,7 +41,9 @@ func TestMailroom_DispatchOutbound(t *testing.T) {
 	ctx := context.Background()
 
 	adapter := &stubAdapter{name: "test", healthy: true}
-	_ = reg.Register(adapter)
+	if err := reg.Register(adapter); err != nil {
+		t.Fatalf("register adapter: %v", err)
+	}
 
 	// Enqueue an outbound message.
 	mail := &types.AgentMail{
@@ -66,7 +68,10 @@ func TestMailroom_DispatchOutbound(t *testing.T) {
 	}
 
 	// Queue should be empty.
-	count, _ := pb.OutboundCount(ctx)
+	count, err := pb.OutboundCount(ctx)
+	if err != nil {
+		t.Fatalf("outbound count: %v", err)
+	}
 	if count != 0 {
 		t.Fatalf("expected 0 outbound after dispatch, got %d", count)
 	}
@@ -81,7 +86,9 @@ func TestMailroom_DispatchOutbound_DeadLetter(t *testing.T) {
 		healthy: true,
 		sendErr: fmt.Errorf("connection refused"),
 	}
-	_ = reg.Register(adapter)
+	if err := reg.Register(adapter); err != nil {
+		t.Fatalf("register adapter: %v", err)
+	}
 
 	mail := &types.AgentMail{
 		ID:       "fail-1",
@@ -97,7 +104,10 @@ func TestMailroom_DispatchOutbound_DeadLetter(t *testing.T) {
 	mr.dispatchOutbound(ctx)
 
 	// The message should be re-enqueued (re-enqueue publishes a new event too).
-	count, _ := pb.OutboundCount(ctx)
+	count, err := pb.OutboundCount(ctx)
+	if err != nil {
+		t.Fatalf("outbound count: %v", err)
+	}
 	if count != 1 {
 		t.Fatalf("expected 1 outbound after first failure, got %d", count)
 	}
@@ -105,7 +115,10 @@ func TestMailroom_DispatchOutbound_DeadLetter(t *testing.T) {
 	// Second dispatch: attempt 2 fails, hits MaxRetries=2, dead-letters.
 	mr.dispatchOutbound(ctx)
 
-	dlo, _ := pb.ListDLO(ctx, 10)
+	dlo, err := pb.ListDLO(ctx, 10)
+	if err != nil {
+		t.Fatalf("list DLO: %v", err)
+	}
 	if len(dlo) != 1 {
 		t.Fatalf("expected 1 DLO entry after max retries, got %d", len(dlo))
 	}
@@ -124,14 +137,19 @@ func TestMailroom_DispatchOutbound_NoAdapter(t *testing.T) {
 		From: "a",
 		To:   "b",
 	}
-	_ = pb.SendOutbound(ctx, mail)
+	if err := pb.SendOutbound(ctx, mail); err != nil {
+		t.Fatalf("send outbound: %v", err)
+	}
 
 	// Should fail immediately and re-enqueue for retry.
 	mr.dispatchOutbound(ctx)
 	mr.dispatchOutbound(ctx)
 
 	// After MaxRetries=2, should be dead-lettered.
-	dlo, _ := pb.ListDLO(ctx, 10)
+	dlo, err := pb.ListDLO(ctx, 10)
+	if err != nil {
+		t.Fatalf("list DLO: %v", err)
+	}
 	if len(dlo) != 1 {
 		t.Fatalf("expected 1 DLO entry, got %d", len(dlo))
 	}
@@ -156,13 +174,18 @@ func TestMailroom_PollInbound(t *testing.T) {
 		healthy: true,
 		inbound: []*types.AgentMail{inboundMail},
 	}
-	_ = reg.Register(adapter)
+	if err := reg.Register(adapter); err != nil {
+		t.Fatalf("register adapter: %v", err)
+	}
 
 	// Poll inbound.
 	mr.pollInbound(ctx)
 
 	// Message should be persisted in inbound queue.
-	count, _ := pb.InboundCount(ctx)
+	count, err := pb.InboundCount(ctx)
+	if err != nil {
+		t.Fatalf("inbound count: %v", err)
+	}
 	if count != 1 {
 		t.Fatalf("expected 1 inbound, got %d", count)
 	}
@@ -189,7 +212,9 @@ func TestMailroom_PollInbound_UnhealthyAdapter(t *testing.T) {
 		healthy: false,
 		inbound: []*types.AgentMail{{ID: "skip"}},
 	}
-	_ = reg.Register(adapter)
+	if err := reg.Register(adapter); err != nil {
+		t.Fatalf("register adapter: %v", err)
+	}
 
 	// Should skip unhealthy adapter.
 	mr.pollInbound(ctx)
@@ -267,7 +292,9 @@ func TestMailroom_PollInbound_SieveMetadata(t *testing.T) {
 		healthy: true,
 		inbound: []*types.AgentMail{inboundMail},
 	}
-	_ = reg.Register(adapter)
+	if err := reg.Register(adapter); err != nil {
+		t.Fatalf("register adapter: %v", err)
+	}
 
 	mr.pollInbound(ctx)
 
@@ -336,7 +363,9 @@ func TestMailroom_PollInbound_SieveBlocksInjection(t *testing.T) {
 		healthy: true,
 		inbound: inbound,
 	}
-	_ = reg.Register(adapter)
+	if err := reg.Register(adapter); err != nil {
+		t.Fatalf("register adapter: %v", err)
+	}
 
 	mr.pollInbound(ctx)
 
@@ -369,7 +398,9 @@ func TestMailroom_PollInbound_SieveStripsMetadata(t *testing.T) {
 		healthy: true,
 		inbound: []*types.AgentMail{inboundMail},
 	}
-	_ = reg.Register(adapter)
+	if err := reg.Register(adapter); err != nil {
+		t.Fatalf("register adapter: %v", err)
+	}
 
 	mr.pollInbound(ctx)
 

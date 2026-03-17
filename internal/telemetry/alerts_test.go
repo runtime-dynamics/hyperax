@@ -31,7 +31,7 @@ func TestAlertEvaluator_ThresholdNotBreached(t *testing.T) {
 	ctx := context.Background()
 
 	// Create alert: total_cost > 100 (should not fire with no data).
-	_, _ = repo.CreateAlert(ctx, &types.Alert{
+	if _, err := repo.CreateAlert(ctx, &types.Alert{
 		Name:      "high-cost",
 		Metric:    "session_cost",
 		Operator:  "gt",
@@ -39,7 +39,9 @@ func TestAlertEvaluator_ThresholdNotBreached(t *testing.T) {
 		Window:    "1h",
 		Severity:  "warning",
 		Enabled:   true,
-	})
+	}); err != nil {
+		t.Fatalf("CreateAlert: %v", err)
+	}
 
 	firings, err := eval.Evaluate(ctx)
 	if err != nil {
@@ -63,20 +65,25 @@ func TestAlertEvaluator_ThresholdBreached(t *testing.T) {
 		AgentID: "agent-1",
 		Status:  "active",
 	}
-	sessID, _ := repo.CreateSession(ctx, sess)
+	sessID, err := repo.CreateSession(ctx, sess)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
 	for i := 0; i < 10; i++ {
-		_ = repo.RecordToolCall(ctx, &types.ToolCallMetric{
+		if err := repo.RecordToolCall(ctx, &types.ToolCallMetric{
 			SessionID: sessID,
 			ToolName:  "search_code",
 			StartedAt: time.Now(),
 			Duration:  100 * time.Millisecond,
 			Success:   true,
 			Cost:      5.0, // 10 * 5.0 = 50.0 total
-		})
+		}); err != nil {
+			t.Fatalf("RecordToolCall[%d]: %v", i, err)
+		}
 	}
 
 	// Create alert: session_cost > 10 (should fire).
-	_, _ = repo.CreateAlert(ctx, &types.Alert{
+	if _, err := repo.CreateAlert(ctx, &types.Alert{
 		Name:      "cost-alert",
 		Metric:    "session_cost",
 		Operator:  "gt",
@@ -84,7 +91,9 @@ func TestAlertEvaluator_ThresholdBreached(t *testing.T) {
 		Window:    "1h",
 		Severity:  "critical",
 		Enabled:   true,
-	})
+	}); err != nil {
+		t.Fatalf("CreateAlert: %v", err)
+	}
 
 	firings, err := eval.Evaluate(ctx)
 	if err != nil {
@@ -126,14 +135,19 @@ func TestAlertEvaluator_DisabledAlertSkipped(t *testing.T) {
 
 	// Add metrics.
 	sess := &types.Session{AgentID: "agent-1", Status: "active"}
-	sessID, _ := repo.CreateSession(ctx, sess)
-	_ = repo.RecordToolCall(ctx, &types.ToolCallMetric{
+	sessID, err := repo.CreateSession(ctx, sess)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if err := repo.RecordToolCall(ctx, &types.ToolCallMetric{
 		SessionID: sessID, ToolName: "x", StartedAt: time.Now(),
 		Duration: 10 * time.Millisecond, Success: true, Cost: 100.0,
-	})
+	}); err != nil {
+		t.Fatalf("RecordToolCall: %v", err)
+	}
 
 	// Create disabled alert.
-	_, _ = repo.CreateAlert(ctx, &types.Alert{
+	if _, err := repo.CreateAlert(ctx, &types.Alert{
 		Name:      "disabled-alert",
 		Metric:    "session_cost",
 		Operator:  "gt",
@@ -141,7 +155,9 @@ func TestAlertEvaluator_DisabledAlertSkipped(t *testing.T) {
 		Window:    "1h",
 		Severity:  "info",
 		Enabled:   false,
-	})
+	}); err != nil {
+		t.Fatalf("CreateAlert: %v", err)
+	}
 
 	firings, err := eval.Evaluate(ctx)
 	if err != nil {
@@ -160,18 +176,28 @@ func TestAlertEvaluator_UpdatesLastFiredAt(t *testing.T) {
 
 	// Add cost data.
 	sess := &types.Session{AgentID: "agent-1", Status: "active"}
-	sessID, _ := repo.CreateSession(ctx, sess)
-	_ = repo.RecordToolCall(ctx, &types.ToolCallMetric{
+	sessID, err := repo.CreateSession(ctx, sess)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+	if err := repo.RecordToolCall(ctx, &types.ToolCallMetric{
 		SessionID: sessID, ToolName: "x", StartedAt: time.Now(),
 		Duration: 10 * time.Millisecond, Success: true, Cost: 50.0,
-	})
+	}); err != nil {
+		t.Fatalf("RecordToolCall: %v", err)
+	}
 
-	alertID, _ := repo.CreateAlert(ctx, &types.Alert{
+	alertID, err := repo.CreateAlert(ctx, &types.Alert{
 		Name: "fires-once", Metric: "session_cost", Operator: "gt",
 		Threshold: 1.0, Window: "1h", Severity: "info", Enabled: true,
 	})
+	if err != nil {
+		t.Fatalf("CreateAlert: %v", err)
+	}
 
-	_, _ = eval.Evaluate(ctx)
+	if _, err := eval.Evaluate(ctx); err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
 
 	// Check that last_fired_at was updated.
 	alert, err := repo.GetAlert(ctx, alertID)
@@ -190,25 +216,34 @@ func TestAlertEvaluator_ErrorRateOperator(t *testing.T) {
 	ctx := context.Background()
 
 	sess := &types.Session{AgentID: "agent-1", Status: "active"}
-	sessID, _ := repo.CreateSession(ctx, sess)
+	sessID, err := repo.CreateSession(ctx, sess)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
 
 	// 5 successes and 5 errors -> 50% error rate.
 	for i := 0; i < 5; i++ {
-		_ = repo.RecordToolCall(ctx, &types.ToolCallMetric{
+		if err := repo.RecordToolCall(ctx, &types.ToolCallMetric{
 			SessionID: sessID, ToolName: "x", StartedAt: time.Now(),
 			Duration: 10 * time.Millisecond, Success: true, Cost: 0.01,
-		})
-		_ = repo.RecordToolCall(ctx, &types.ToolCallMetric{
+		}); err != nil {
+			t.Fatalf("RecordToolCall success[%d]: %v", i, err)
+		}
+		if err := repo.RecordToolCall(ctx, &types.ToolCallMetric{
 			SessionID: sessID, ToolName: "x", StartedAt: time.Now(),
 			Duration: 10 * time.Millisecond, Success: false, Cost: 0.01,
-		})
+		}); err != nil {
+			t.Fatalf("RecordToolCall error[%d]: %v", i, err)
+		}
 	}
 
 	// Alert: error_rate > 0.3 should fire.
-	_, _ = repo.CreateAlert(ctx, &types.Alert{
+	if _, err := repo.CreateAlert(ctx, &types.Alert{
 		Name: "high-error-rate", Metric: "error_rate", Operator: "gt",
 		Threshold: 0.3, Window: "1h", Severity: "warning", Enabled: true,
-	})
+	}); err != nil {
+		t.Fatalf("CreateAlert: %v", err)
+	}
 
 	firings, err := eval.Evaluate(ctx)
 	if err != nil {

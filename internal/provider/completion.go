@@ -268,8 +268,14 @@ func ollamaTrace(format string, args ...any) {
 	if err != nil {
 		return
 	}
-	defer func() { _ = f.Close() }()
-	_, _ = f.WriteString(line)
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Debug("ollamaTrace: failed to close trace log", "error", cerr)
+		}
+	}()
+	if _, werr := f.WriteString(line); werr != nil {
+		slog.Debug("ollamaTrace: failed to write trace log", "error", werr)
+	}
 }
 
 // ollamaChatRequest is the request body for Ollama's /api/chat endpoint.
@@ -345,7 +351,9 @@ func completeOllama(ctx context.Context, req *CompletionRequest) (*CompletionRes
 
 	// DEBUG: dump the full request being sent to Ollama for diagnostics.
 	if debugData, debugErr := json.MarshalIndent(body, "", "  "); debugErr == nil {
-		_ = os.WriteFile(filepath.Join("data", "ollama_debug.json"), debugData, 0o644)
+		if writeErr := os.WriteFile(filepath.Join("data", "ollama_debug.json"), debugData, 0o644); writeErr != nil {
+			slog.Debug("completeOllama: failed to write debug file", "error", writeErr)
+		}
 	}
 
 	respBody, err := ollamaPost(ctx, reqURL, body)
@@ -358,7 +366,9 @@ func completeOllama(ctx context.Context, req *CompletionRequest) (*CompletionRes
 
 	// Write the response dump for debugging (before any processing).
 	if respDump, dumpErr := json.MarshalIndent(json.RawMessage(respBody), "", "  "); dumpErr == nil {
-		_ = os.WriteFile(filepath.Join("data", "ollama_response_debug.json"), respDump, 0o644)
+		if writeErr := os.WriteFile(filepath.Join("data", "ollama_response_debug.json"), respDump, 0o644); writeErr != nil {
+			slog.Debug("completeOllama: failed to write response debug file", "error", writeErr)
+		}
 	}
 
 	// Detect response format: OpenAI-compatible (has "choices") vs native Ollama (has "message").
@@ -501,7 +511,7 @@ func completeOllamaNative(respBody []byte, agentName string) (*CompletionRespons
 	}
 	if err := json.Unmarshal(respBody, &rawMsg); err != nil {
 		ollamaTrace("  ERROR: unmarshal raw message: %v", err)
-		slog.Error("failed to unmarshal Ollama response for normalization", "error", err)
+		return nil, fmt.Errorf("provider.completeOllama: unmarshal raw message for normalization: %w", err)
 	}
 
 	// Native Ollama tool_calls may lack "id" and "type" fields. Inject them
@@ -539,10 +549,16 @@ func completeOllamaNative(respBody []byte, agentName string) (*CompletionRespons
 			// Rebuild the raw message with patched tool_calls.
 			var msgMap map[string]any
 			if json.Unmarshal(rawMsg.Message, &msgMap) == nil {
-				patchedJSON, _ := json.Marshal(patched)
-				msgMap["tool_calls"] = json.RawMessage(patchedJSON)
-				if rebuilt, err := json.Marshal(msgMap); err == nil {
-					rawMsg.Message = rebuilt
+				patchedJSON, patchErr := json.Marshal(patched)
+				if patchErr != nil {
+					ollamaTrace("  ERROR: marshal patched tool_calls: %v", patchErr)
+				} else {
+					msgMap["tool_calls"] = json.RawMessage(patchedJSON)
+					if rebuilt, rebuildErr := json.Marshal(msgMap); rebuildErr == nil {
+						rawMsg.Message = rebuilt
+					} else {
+						ollamaTrace("  ERROR: rebuild raw message: %v", rebuildErr)
+					}
 				}
 			}
 		}
@@ -562,8 +578,7 @@ func completeOllamaNative(respBody []byte, agentName string) (*CompletionRespons
 	})
 	if err != nil {
 		ollamaTrace("  ERROR: normalize to OpenAI format: %v", err)
-		slog.Error("failed to normalize Ollama response to OpenAI format", "error", err)
-		normalized = respBody
+		return nil, fmt.Errorf("provider.completeOllama: normalize response to OpenAI format: %w", err)
 	}
 
 	ollamaTrace("  normalized response: %d bytes, stopReason=%s", len(normalized), stopReason)
@@ -712,7 +727,10 @@ func convertOpenAIMessages(msgs []ChatMessage) ([]openai.ChatCompletionMessagePa
 		default:
 			// For unknown roles (e.g. "tool"), unmarshal from JSON.
 			var sdkMsg openai.ChatCompletionMessageParamUnion
-			raw, _ := json.Marshal(msg)
+			raw, marshalErr := json.Marshal(msg)
+			if marshalErr != nil {
+				return nil, fmt.Errorf("marshal %s message: %w", msg.Role, marshalErr)
+			}
 			if err := json.Unmarshal(raw, &sdkMsg); err != nil {
 				return nil, fmt.Errorf("unmarshal %s message: %w", msg.Role, err)
 			}
@@ -769,7 +787,10 @@ func completeAnthropic(ctx context.Context, req *CompletionRequest) (*Completion
 	cachedTools := injectToolCacheControl(req.Tools)
 
 	// Build SDK messages with cache breakpoints on the conversation prefix.
-	sdkMsgs := marshalAnthropicSDKMessages(nonSystemMessages)
+	sdkMsgs, err := marshalAnthropicSDKMessages(nonSystemMessages)
+	if err != nil {
+		return nil, fmt.Errorf("provider.completeAnthropic: build SDK messages: %w", err)
+	}
 
 	// Convert tools from adapter JSON to SDK types.
 	var sdkTools []anthropic.ToolUnionParam
@@ -851,7 +872,10 @@ func injectToolCacheControl(tools json.RawMessage) json.RawMessage {
 	if err := json.Unmarshal(toolArray[len(toolArray)-1], &lastTool); err != nil {
 		return tools
 	}
-	cc, _ := json.Marshal(anthropicCacheControl{Type: "ephemeral"})
+	cc, err := json.Marshal(anthropicCacheControl{Type: "ephemeral"})
+	if err != nil {
+		return tools
+	}
 	lastTool["cache_control"] = cc
 	modified, err := json.Marshal(lastTool)
 	if err != nil {
@@ -869,9 +893,9 @@ func injectToolCacheControl(tools json.RawMessage) json.RawMessage {
 // marshalAnthropicSDKMessages converts ChatMessages to Anthropic SDK MessageParam
 // types, adding cache_control=ephemeral as a breakpoint on the conversation
 // history prefix (all messages except the final user message).
-func marshalAnthropicSDKMessages(msgs []ChatMessage) []anthropic.MessageParam {
+func marshalAnthropicSDKMessages(msgs []ChatMessage) ([]anthropic.MessageParam, error) {
 	if len(msgs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Find the cache breakpoint: last message before the final user message.
@@ -886,8 +910,7 @@ func marshalAnthropicSDKMessages(msgs []ChatMessage) []anthropic.MessageParam {
 			// Pre-formatted full message from tool-use bridge — unmarshal directly.
 			var sdkMsg anthropic.MessageParam
 			if err := json.Unmarshal(msg.RawMessage, &sdkMsg); err != nil {
-				slog.Error("failed to unmarshal Anthropic raw message", "error", err)
-				continue
+				return nil, fmt.Errorf("unmarshal Anthropic raw message at index %d: %w", i, err)
 			}
 			result = append(result, sdkMsg)
 			continue
@@ -897,8 +920,7 @@ func marshalAnthropicSDKMessages(msgs []ChatMessage) []anthropic.MessageParam {
 			// RawContent from the tool-use bridge — unmarshal content blocks.
 			var blocks []anthropic.ContentBlockParamUnion
 			if err := json.Unmarshal(msg.RawContent, &blocks); err != nil {
-				slog.Error("failed to unmarshal Anthropic raw content", "error", err)
-				continue
+				return nil, fmt.Errorf("unmarshal Anthropic raw content at index %d: %w", i, err)
 			}
 
 			// At cache breakpoint, inject cache_control on the last block.
@@ -934,7 +956,7 @@ func marshalAnthropicSDKMessages(msgs []ChatMessage) []anthropic.MessageParam {
 			})
 		}
 	}
-	return result
+	return result, nil
 }
 
 // injectBlockCacheControl sets cache_control=ephemeral on the last block in
@@ -1260,7 +1282,10 @@ func completeGoogle(ctx context.Context, req *CompletionRequest) (*CompletionRes
 			// session handler can then retry or surface the message.
 			if c.FinishReason == "MALFORMED_FUNCTION_CALL" {
 				googleTrace("  recovering from MALFORMED_FUNCTION_CALL with synthetic response")
-				rawResp, _ := json.Marshal(resp)
+				rawResp, marshalErr := json.Marshal(resp)
+				if marshalErr != nil {
+					return nil, fmt.Errorf("provider.completeGoogle: marshal MALFORMED_FUNCTION_CALL response: %w", marshalErr)
+				}
 				return &CompletionResponse{
 					Content:     "I attempted to use a tool but the request was malformed. Let me try a different approach.",
 					Model:       resp.ModelVersion,
@@ -1427,7 +1452,7 @@ func completeBedrock(ctx context.Context, req *CompletionRequest) (*CompletionRe
 	// Build Bedrock SDK messages and system blocks.
 	var systemBlocks []brtypes.SystemContentBlock
 	var messages []brtypes.Message
-	for _, msg := range req.Messages {
+	for msgIdx, msg := range req.Messages {
 		if msg.Role == "system" {
 			systemBlocks = append(systemBlocks, &brtypes.SystemContentBlockMemberText{
 				Value: msg.Content,
@@ -1436,7 +1461,10 @@ func completeBedrock(ctx context.Context, req *CompletionRequest) (*CompletionRe
 		}
 		if msg.RawContent != nil {
 			// RawContent from the tool-use adapter — Bedrock-formatted content blocks.
-			sdkBlocks := convertBedrockRawContent(msg.RawContent)
+			sdkBlocks, convErr := convertBedrockRawContent(msg.RawContent)
+			if convErr != nil {
+				return nil, fmt.Errorf("provider.completeBedrock: convert raw content at message %d: %w", msgIdx, convErr)
+			}
 			if len(sdkBlocks) > 0 {
 				messages = append(messages, brtypes.Message{
 					Role:    brtypes.ConversationRole(msg.Role),
@@ -1492,7 +1520,10 @@ func completeBedrock(ctx context.Context, req *CompletionRequest) (*CompletionRe
 	}
 
 	// Convert SDK response to wire-format JSON for adapter compatibility.
-	wireResp := convertBedrockToWireResponse(sdkResp)
+	wireResp, err := convertBedrockToWireResponse(sdkResp)
+	if err != nil {
+		return nil, fmt.Errorf("provider.completeBedrock: convert response: %w", err)
+	}
 	respBody, err := json.Marshal(wireResp)
 	if err != nil {
 		return nil, fmt.Errorf("provider.completeBedrock: marshal response: %w", err)
@@ -1559,10 +1590,10 @@ func extractBedrockRegion(baseURL string) string {
 
 // convertBedrockRawContent converts adapter-formatted JSON content blocks
 // into Bedrock SDK ContentBlock types.
-func convertBedrockRawContent(raw json.RawMessage) []brtypes.ContentBlock {
+func convertBedrockRawContent(raw json.RawMessage) ([]brtypes.ContentBlock, error) {
 	var blocks []bedrockContentBlock
 	if err := json.Unmarshal(raw, &blocks); err != nil {
-		return nil
+		return nil, fmt.Errorf("unmarshal bedrock content blocks: %w", err)
 	}
 
 	var result []brtypes.ContentBlock
@@ -1579,7 +1610,9 @@ func convertBedrockRawContent(raw json.RawMessage) []brtypes.ContentBlock {
 			if json.Unmarshal(b.ToolUse, &tu) == nil {
 				// Convert Input JSON to a document.Interface via NewLazyDocument.
 				var inputMap map[string]any
-				_ = json.Unmarshal(tu.Input, &inputMap)
+				if unmarshalErr := json.Unmarshal(tu.Input, &inputMap); unmarshalErr != nil {
+					return nil, fmt.Errorf("unmarshal tool use input for %q: %w", tu.Name, unmarshalErr)
+				}
 				result = append(result, &brtypes.ContentBlockMemberToolUse{
 					Value: brtypes.ToolUseBlock{
 						ToolUseId: aws.String(tu.ToolUseID),
@@ -1619,7 +1652,7 @@ func convertBedrockRawContent(raw json.RawMessage) []brtypes.ContentBlock {
 			}
 		}
 	}
-	return result
+	return result, nil
 }
 
 // convertBedrockToolConfig converts adapter-formatted tool JSON to the SDK's
@@ -1643,7 +1676,9 @@ func convertBedrockToolConfig(toolsJSON json.RawMessage) (*brtypes.ToolConfigura
 	var sdkTools []brtypes.Tool
 	for _, t := range wireConfig.Tools {
 		var schemaMap map[string]any
-		_ = json.Unmarshal(t.ToolSpec.InputSchema.JSON, &schemaMap)
+		if err := json.Unmarshal(t.ToolSpec.InputSchema.JSON, &schemaMap); err != nil {
+			return nil, fmt.Errorf("parse input schema for tool %q: %w", t.ToolSpec.Name, err)
+		}
 		sdkTools = append(sdkTools, &brtypes.ToolMemberToolSpec{
 			Value: brtypes.ToolSpecification{
 				Name:        aws.String(t.ToolSpec.Name),
@@ -1658,7 +1693,7 @@ func convertBedrockToolConfig(toolsJSON json.RawMessage) (*brtypes.ToolConfigura
 
 // convertBedrockToWireResponse converts the SDK response to the wire format
 // JSON structure that the adapter (adapter_bedrock.go) expects.
-func convertBedrockToWireResponse(resp *bedrockruntime.ConverseOutput) bedrockWireResponse {
+func convertBedrockToWireResponse(resp *bedrockruntime.ConverseOutput) (bedrockWireResponse, error) {
 	wire := bedrockWireResponse{
 		StopReason: string(resp.StopReason),
 	}
@@ -1676,8 +1711,11 @@ func convertBedrockToWireResponse(resp *bedrockruntime.ConverseOutput) bedrockWi
 			case *brtypes.ContentBlockMemberToolUse:
 				// Marshal tool use to JSON for the adapter.
 				// Use MarshalSmithyDocument to extract JSON from the document.Interface.
-				inputJSON, _ := b.Value.Input.MarshalSmithyDocument()
-				tuJSON, _ := json.Marshal(struct {
+				inputJSON, err := b.Value.Input.MarshalSmithyDocument()
+				if err != nil {
+					return bedrockWireResponse{}, fmt.Errorf("marshal tool use input for %q: %w", aws.ToString(b.Value.Name), err)
+				}
+				tuJSON, err := json.Marshal(struct {
 					ToolUseID string          `json:"toolUseId"`
 					Name      string          `json:"name"`
 					Input     json.RawMessage `json:"input"`
@@ -1686,6 +1724,9 @@ func convertBedrockToWireResponse(resp *bedrockruntime.ConverseOutput) bedrockWi
 					Name:      aws.ToString(b.Value.Name),
 					Input:     inputJSON,
 				})
+				if err != nil {
+					return bedrockWireResponse{}, fmt.Errorf("marshal tool use block for %q: %w", aws.ToString(b.Value.Name), err)
+				}
 				msg.Content = append(msg.Content, bedrockContentBlock{ToolUse: tuJSON})
 			}
 		}
@@ -1707,7 +1748,7 @@ func convertBedrockToWireResponse(resp *bedrockruntime.ConverseOutput) bedrockWi
 		}
 	}
 
-	return wire
+	return wire, nil
 }
 
 // -- HTTP helper (Ollama only) -----------------------------------------------
@@ -1736,7 +1777,11 @@ func ollamaPost(ctx context.Context, url string, body any) ([]byte, error) {
 		ollamaTrace("  POST ERROR: connect to %s: %v", url, err)
 		return nil, fmt.Errorf("provider.ollamaPost: connect to %s: %w", url, err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Debug("ollamaPost: failed to close response body", "error", cerr)
+		}
+	}()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

@@ -192,8 +192,12 @@ func (r *NervousRepo) GetHandler(ctx context.Context, id string) (*types.EventHa
 	}
 
 	h.Enabled = enabled == 1
-	h.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
-	h.UpdatedAt, _ = time.Parse(sqliteTimeFormat, updatedAt)
+	if h.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.NervousRepo.GetHandler"); err != nil {
+		return nil, err
+	}
+	if h.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.NervousRepo.GetHandler"); err != nil {
+		return nil, err
+	}
 
 	return h, nil
 }
@@ -223,8 +227,13 @@ func (r *NervousRepo) ListHandlers(ctx context.Context) ([]*types.EventHandler, 
 		}
 
 		h.Enabled = enabled == 1
-		h.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
-		h.UpdatedAt, _ = time.Parse(sqliteTimeFormat, updatedAt)
+		var parseErr error
+		if h.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.NervousRepo.ListHandlers"); parseErr != nil {
+			return nil, parseErr
+		}
+		if h.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.NervousRepo.ListHandlers"); parseErr != nil {
+			return nil, parseErr
+		}
 		handlers = append(handlers, h)
 	}
 
@@ -303,9 +312,14 @@ func scanDomainEvents(rows *sql.Rows) ([]*types.DomainEvent, error) {
 		}
 
 		e.EventType = types.EventType(eventType)
-		e.CreatedAt, _ = time.Parse(sqliteTimeFormat, createdAt)
+		var parseErr error
+		if e.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.scanDomainEvents"); parseErr != nil {
+			return nil, parseErr
+		}
 		if expiresAt != "" {
-			e.ExpiresAt, _ = time.Parse(sqliteTimeFormat, expiresAt)
+			if e.ExpiresAt, parseErr = parseSQLiteTime(expiresAt, "sqlite.scanDomainEvents.expiresAt"); parseErr != nil {
+				return nil, parseErr
+			}
 		}
 		events = append(events, e)
 	}

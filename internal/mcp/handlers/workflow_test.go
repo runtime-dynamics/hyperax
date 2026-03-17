@@ -409,7 +409,9 @@ func TestWorkflowHandler_ListWorkflows_WithWorkflows(t *testing.T) {
 
 	// Create a workflow directly in the repo.
 	wf := &repo.Workflow{Name: "my-wf", Description: "desc", Enabled: true}
-	_, _ = mockRepo.CreateWorkflow(ctx, wf)
+	if _, err := mockRepo.CreateWorkflow(ctx, wf); err != nil {
+		t.Fatalf("create workflow: %v", err)
+	}
 
 	result := callWorkflowTool(t, h.listWorkflows, ctx, map[string]string{})
 
@@ -428,7 +430,10 @@ func TestWorkflowHandler_RunWorkflow(t *testing.T) {
 
 	// Create a workflow with one step.
 	wf := &repo.Workflow{Name: "run-me", Enabled: true}
-	wfID, _ := mockRepo.CreateWorkflow(ctx, wf)
+	wfID, err := mockRepo.CreateWorkflow(ctx, wf)
+	if err != nil {
+		t.Fatalf("create workflow: %v", err)
+	}
 
 	step := &repo.WorkflowStep{
 		WorkflowID: wfID,
@@ -437,7 +442,9 @@ func TestWorkflowHandler_RunWorkflow(t *testing.T) {
 		Action:     json.RawMessage(`{}`),
 		Position:   0,
 	}
-	_, _ = mockRepo.CreateStep(ctx, step)
+	if _, err := mockRepo.CreateStep(ctx, step); err != nil {
+		t.Fatalf("create step: %v", err)
+	}
 
 	result := callWorkflowTool(t, h.runWorkflow, ctx, map[string]string{
 		"workflow_id": wfID,
@@ -468,7 +475,10 @@ func TestWorkflowHandler_GetWorkflowStatus(t *testing.T) {
 
 	// Create a workflow, a run, and a run step.
 	wf := &repo.Workflow{Name: "status-test", Enabled: true}
-	wfID, _ := mockRepo.CreateWorkflow(ctx, wf)
+	wfID, err := mockRepo.CreateWorkflow(ctx, wf)
+	if err != nil {
+		t.Fatalf("create workflow: %v", err)
+	}
 
 	step := &repo.WorkflowStep{
 		WorkflowID: wfID,
@@ -477,21 +487,29 @@ func TestWorkflowHandler_GetWorkflowStatus(t *testing.T) {
 		Action:     json.RawMessage(`{}`),
 		Position:   0,
 	}
-	stepID, _ := mockRepo.CreateStep(ctx, step)
+	stepID, err := mockRepo.CreateStep(ctx, step)
+	if err != nil {
+		t.Fatalf("create step: %v", err)
+	}
 
 	run := &repo.WorkflowRun{
 		WorkflowID: wfID,
 		Status:     "running",
 		Context:    json.RawMessage(`{}`),
 	}
-	runID, _ := mockRepo.CreateRun(ctx, run)
+	runID, err := mockRepo.CreateRun(ctx, run)
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
 
 	rs := &repo.WorkflowRunStep{
 		RunID:  runID,
 		StepID: stepID,
 		Status: "running",
 	}
-	_, _ = mockRepo.CreateRunStep(ctx, rs)
+	if _, err := mockRepo.CreateRunStep(ctx, rs); err != nil {
+		t.Fatalf("create run step: %v", err)
+	}
 
 	result := callWorkflowTool(t, h.getWorkflowStatus, ctx, map[string]string{
 		"run_id": runID,

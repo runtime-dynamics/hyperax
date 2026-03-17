@@ -144,7 +144,10 @@ func (h *RefactorHandler) markModifiedIfTransaction(txID, absPath string) {
 	if txID == "" {
 		return
 	}
-	_ = h.txMgr.MarkModified(txID, absPath)
+	if err := h.txMgr.MarkModified(txID, absPath); err != nil {
+		slog.Warn("failed to mark file as modified in transaction",
+			"tx_id", txID, "path", absPath, "error", err)
+	}
 }
 
 func (h *RefactorHandler) beginTransaction(_ context.Context, _ json.RawMessage) (*types.ToolResult, error) {

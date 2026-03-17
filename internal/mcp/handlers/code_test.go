@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -48,7 +47,7 @@ func TestGetFileContent_DefaultLimit500(t *testing.T) {
 	handler, root, ctx := setupCodeTestWorkspace(t)
 	writeTestFile(t, root, "big.go", 800)
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "big.go",
 	})
@@ -84,7 +83,7 @@ func TestGetFileContent_SmallFileNoTruncation(t *testing.T) {
 	handler, root, ctx := setupCodeTestWorkspace(t)
 	writeTestFile(t, root, "small.go", 50)
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "small.go",
 	})
@@ -111,7 +110,7 @@ func TestGetFileContent_UnlimitedWithMinusOne(t *testing.T) {
 	handler, root, ctx := setupCodeTestWorkspace(t)
 	writeTestFile(t, root, "full.go", 800)
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "full.go",
 		"limit":          -1,
@@ -139,7 +138,7 @@ func TestGetFileContent_OffsetPaging(t *testing.T) {
 	handler, root, ctx := setupCodeTestWorkspace(t)
 	writeTestFile(t, root, "paged.go", 600)
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "paged.go",
 		"offset":         501,
@@ -167,7 +166,7 @@ func TestGetFileContent_CustomLimit(t *testing.T) {
 	handler, root, ctx := setupCodeTestWorkspace(t)
 	writeTestFile(t, root, "custom.go", 100)
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "custom.go",
 		"limit":          20,
@@ -193,7 +192,7 @@ func TestGetFileContent_ExactlyAtLimit(t *testing.T) {
 	handler, root, ctx := setupCodeTestWorkspace(t)
 	writeTestFile(t, root, "exact.go", 500)
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "exact.go",
 	})
@@ -222,7 +221,7 @@ func TestGetFileContent_MemoryFirstResolution(t *testing.T) {
 		}, nil
 	})
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "main.go",
 	})
@@ -259,7 +258,7 @@ func TestGetFileContent_MemoryContextOnlyOnFirstPage(t *testing.T) {
 	})
 
 	// Request starting from offset 50 — should NOT include memory context.
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "paged.go",
 		"offset":         50,
@@ -285,7 +284,7 @@ func TestGetFileContent_NoMemoryResolver(t *testing.T) {
 	writeTestFile(t, root, "simple.go", 10)
 
 	// No memory resolver set.
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "simple.go",
 	})
@@ -309,7 +308,7 @@ func TestGetFileContent_EmptyMemoryResults(t *testing.T) {
 		return nil, nil // no memories
 	})
 
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "clean.go",
 	})
@@ -332,7 +331,7 @@ func TestReplaceLines_Basic(t *testing.T) {
 	writeTestFile(t, root, "replace.go", 10)
 
 	// Replace lines 4-6 with two new lines.
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "replace.go",
 		"start_line":     4,
@@ -378,7 +377,7 @@ func TestReplaceLines_LargeFile(t *testing.T) {
 	writeTestFile(t, root, "large.go", 5000)
 
 	// Replace lines 2500-2502 in a large file.
-	params, _ := json.Marshal(map[string]any{
+	params := mustMarshalJSON(t, map[string]any{
 		"workspace_name": "test",
 		"path":           "large.go",
 		"start_line":     2500,
@@ -428,7 +427,7 @@ func TestReplaceLines_InvalidRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			params, _ := json.Marshal(map[string]any{
+			params := mustMarshalJSON(t, map[string]any{
 				"workspace_name": "test",
 				"path":           "invalid.go",
 				"start_line":     tt.startLine,

@@ -181,7 +181,11 @@ func (h *CodeHandler) getFileContent(ctx context.Context, params json.RawMessage
 	if err != nil {
 		return types.NewErrorResult(fmt.Sprintf("open file: %v", err)), nil
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	var sb strings.Builder
 	scanner := bufio.NewScanner(f)
@@ -465,7 +469,11 @@ func parseGoImports(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	var imports []string
 	scanner := bufio.NewScanner(f)
@@ -535,7 +543,11 @@ func (h *CodeHandler) searchImports(ctx context.Context, params json.RawMessage)
 	if err != nil {
 		return nil, fmt.Errorf("handlers.CodeHandler.searchImports: query: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			slog.Warn("failed to close rows", "error", cerr)
+		}
+	}()
 
 	type importHit struct {
 		FilePath   string
@@ -683,7 +695,11 @@ func readFileLines(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("failed to close file", "error", cerr)
+		}
+	}()
 
 	var lines []string
 	scanner := bufio.NewScanner(f)
@@ -704,18 +720,28 @@ func writeFileLines(path string, lines []string) error {
 	w := bufio.NewWriter(f)
 	for _, line := range lines {
 		if _, err := w.WriteString(line + "\n"); err != nil {
-			_ = f.Close()
-			_ = os.Remove(tmp)
+			if cerr := f.Close(); cerr != nil {
+				slog.Warn("cleanup: failed to close temp file after write error", "path", tmp, "error", cerr)
+			}
+			if rerr := os.Remove(tmp); rerr != nil {
+				slog.Warn("cleanup: failed to remove temp file after write error", "path", tmp, "error", rerr)
+			}
 			return fmt.Errorf("write line: %w", err)
 		}
 	}
 	if err := w.Flush(); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmp)
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("cleanup: failed to close temp file after flush error", "path", tmp, "error", cerr)
+		}
+		if rerr := os.Remove(tmp); rerr != nil {
+			slog.Warn("cleanup: failed to remove temp file after flush error", "path", tmp, "error", rerr)
+		}
 		return fmt.Errorf("flush: %w", err)
 	}
 	if err := f.Close(); err != nil {
-		_ = os.Remove(tmp)
+		if rerr := os.Remove(tmp); rerr != nil {
+			slog.Warn("cleanup: failed to remove temp file after close error", "path", tmp, "error", rerr)
+		}
 		return fmt.Errorf("close: %w", err)
 	}
 	return os.Rename(tmp, path)

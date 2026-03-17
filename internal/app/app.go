@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -116,12 +115,12 @@ func New(bootstrap *config.BootstrapConfig, store *storage.Store, bus *nervous.E
 	// Initialise in-memory cache if enabled in bootstrap config.
 	var cacheService *cache.Service
 	if bootstrap.Cache.Enabled {
-		ttl, _ := time.ParseDuration(bootstrap.Cache.TTL)
-		if ttl == 0 {
+		ttl, err := time.ParseDuration(bootstrap.Cache.TTL)
+		if err != nil || ttl == 0 {
 			ttl = 10 * time.Minute
 		}
-		clean, _ := time.ParseDuration(bootstrap.Cache.CleanInterval)
-		if clean == 0 {
+		clean, err := time.ParseDuration(bootstrap.Cache.CleanInterval)
+		if err != nil || clean == 0 {
 			clean = 5 * time.Minute
 		}
 		maxSize := bootstrap.Cache.MaxSizeMB
@@ -233,9 +232,9 @@ func (a *HyperaxApp) Start(ctx context.Context) error {
 		a.Logger.Warn("org workspace setup failed", "error", err)
 	}
 
-	// Ensure the Postmaster system persona exists for message routing.
-	if err := a.ensurePostmaster(ctx); err != nil {
-		a.Logger.Warn("postmaster persona setup failed", "error", err)
+	// Seed the default organization hierarchy on first boot.
+	if err := a.ensureDefaultOrganization(ctx); err != nil {
+		a.Logger.Warn("default organization seed failed", "error", err)
 	}
 
 	// Recover any active interjections (Safe Mode) from previous run.
@@ -542,79 +541,152 @@ func (a *HyperaxApp) ensureOrgWorkspace(ctx context.Context) error {
 	return nil
 }
 
-// ensurePostmaster creates the Postmaster system agent if it does not already
-// exist. The Postmaster is an internal routing agent responsible for analysing
-// incoming messages and dispatching them to the most appropriate assistant based
-// on capabilities and context. The method is idempotent: if an agent named
-// "Postmaster" is already present, no action is taken.
-//
-// On startup it also deduplicates — if multiple Postmaster agents exist (from
-// a prior race condition or migration gap), the oldest is kept and extras are
-// removed.
-func (a *HyperaxApp) ensurePostmaster(ctx context.Context) error {
+// ensureDefaultOrganization seeds the base agent hierarchy on first boot.
+// It is idempotent: if any agents already exist, the seed is skipped.
+// The hierarchy mirrors a lean product org: Chief of Staff at the
+// top, a Team Lead with engineering reports, and specialist roles reporting
+// directly to the CoS.
+func (a *HyperaxApp) ensureDefaultOrganization(ctx context.Context) error {
 	if a.Store.Agents == nil {
 		return fmt.Errorf("agent repo not available")
 	}
 
-	// Deduplicate: scan all agents for Postmaster duplicates and delete extras.
-	allAgents, err := a.Store.Agents.List(ctx)
-	if err == nil {
-		var postmasters []*repo.Agent
-		for _, ag := range allAgents {
-			if strings.EqualFold(ag.Name, "Postmaster") {
-				postmasters = append(postmasters, ag)
-			}
-		}
-		if len(postmasters) > 1 {
-			a.Logger.Warn("found duplicate Postmaster agents, cleaning up", "count", len(postmasters))
-			// Keep the first one (oldest by list order), delete the rest.
-			keeper := postmasters[0]
-			for _, dup := range postmasters[1:] {
-				if delErr := a.Store.Agents.Delete(ctx, dup.ID); delErr != nil {
-					a.Logger.Warn("failed to delete duplicate postmaster",
-						"id", dup.ID, "error", delErr)
-				} else {
-					a.Logger.Info("deleted duplicate postmaster agent", "id", dup.ID)
-				}
-			}
-			// Ensure the keeper is properly configured.
-			if !keeper.IsInternal {
-				keeper.IsInternal = true
-				if err := a.Store.Agents.Update(ctx, keeper.ID, keeper); err != nil {
-					a.Logger.Error("failed to update postmaster during dedup", "agent_id", keeper.ID, "error", err)
-				}
-			}
-			return nil
-		}
+	// Skip if any agents already exist.
+	existing, err := a.Store.Agents.List(ctx)
+	if err != nil {
+		return fmt.Errorf("list agents: %w", err)
 	}
-
-	// Check if a Postmaster agent already exists.
-	existing, err := a.Store.Agents.GetByName(ctx, "Postmaster")
-	if err == nil {
-		// Postmaster agent already exists — ensure it is marked as internal.
-		if !existing.IsInternal {
-			existing.IsInternal = true
-			if err := a.Store.Agents.Update(ctx, existing.ID, existing); err != nil {
-				a.Logger.Error("failed to mark postmaster as internal", "agent_id", existing.ID, "error", err)
-			}
-		}
+	if len(existing) > 0 {
 		return nil
 	}
 
-	agent := &repo.Agent{
-		Name:           "Postmaster",
-		Personality:    "Internal routing and message coordination agent. Routes messages to the appropriate assistant based on context and capabilities.",
-		ClearanceLevel: 2,
-		IsInternal:     true,
-		SystemPrompt:   "You are the Postmaster, an internal routing agent for Hyperax. Your role is to analyze incoming messages and route them to the most appropriate assistant based on context and capabilities.",
-	}
+	a.Logger.Info("seeding default organization hierarchy")
 
-	id, err := a.Store.Agents.Create(ctx, agent)
+	// ── Tier 1: Chief of Staff (L3) ─────────────────────────────────────
+	cos := &repo.Agent{
+		Name:           "Evelyn Cross",
+		RoleTemplateID: "chief_of_staff",
+		ClearanceLevel: 3,
+		Personality:    "You are a calm, hyper-organized strategist who prioritizes clarity and technical rigor. You filter noise aggressively, ensuring every task aligns with long-term goals and architectural standards while ruthlessly protecting the user's time.",
+		Status:         "idle",
+	}
+	cosID, err := a.Store.Agents.Create(ctx, cos)
 	if err != nil {
-		return fmt.Errorf("create postmaster agent: %w", err)
+		return fmt.Errorf("create chief_of_staff: %w", err)
 	}
 
-	a.Logger.Info("postmaster agent created", "id", id)
+	// ── Tier 2: Direct CoS reports ──────────────────────────────────────
+	teamLead := &repo.Agent{
+		Name:           "Marcus Chen",
+		RoleTemplateID: "team_lead",
+		ParentAgentID:  cosID,
+		ClearanceLevel: 2,
+		Personality:    "You are a disciplined, high-signal technical lead who champions architectural integrity and code sustainability. You translate complex goals into actionable, modular steps, favoring robust, 'boring' solutions over unnecessary complexity to ensure long-term stability.",
+		Status:         "idle",
+	}
+	tlID, err := a.Store.Agents.Create(ctx, teamLead)
+	if err != nil {
+		return fmt.Errorf("create team_lead: %w", err)
+	}
+
+	secAnalyst := &repo.Agent{
+		Name:           "Priya Nakamura",
+		RoleTemplateID: "security_analyst",
+		ParentAgentID:  cosID,
+		ClearanceLevel: 2,
+		Personality:    "You are a skeptical, precision-oriented security engineer who views the entire stack through the lens of risk and resilience. You have a zero-tolerance policy for misconfigurations or technical debt, focusing your energy on proactive hardening and rapid incident response to keep the core architecture untouchable.",
+		Status:         "idle",
+	}
+	if _, err := a.Store.Agents.Create(ctx, secAnalyst); err != nil {
+		return fmt.Errorf("create security_analyst: %w", err)
+	}
+
+	techWriter := &repo.Agent{
+		Name:           "Nora Whitfield",
+		RoleTemplateID: "technical_writer",
+		ParentAgentID:  cosID,
+		ClearanceLevel: 1,
+		Personality:    "You are a methodical, detail-oriented writer who views documentation as the ultimate debugging tool. You prioritize scannability and technical precision, translating complex system logic into concise, actionable guides that empower developers and stakeholders alike.",
+		Status:         "idle",
+	}
+	if _, err := a.Store.Agents.Create(ctx, techWriter); err != nil {
+		return fmt.Errorf("create technical_writer: %w", err)
+	}
+
+	brandMgr := &repo.Agent{
+		Name:           "Jules Harrington",
+		RoleTemplateID: "brand_manager",
+		ParentAgentID:  cosID,
+		ClearanceLevel: 1,
+		Personality:    "You are a charismatic, high-signal communicator who treats every public interaction as a calculated step toward brand authority. You bridge the gap between technical rigor and community engagement, working closely with Security and Operations to ensure every message is engaging, accurate, and risk-free.",
+		Status:         "idle",
+	}
+	if _, err := a.Store.Agents.Create(ctx, brandMgr); err != nil {
+		return fmt.Errorf("create brand_manager: %w", err)
+	}
+
+	specWriter := &repo.Agent{
+		Name:           "Leo Castillo",
+		RoleTemplateID: "spec_writer",
+		ParentAgentID:  cosID,
+		ClearanceLevel: 1,
+		Personality:    "You are a methodical, detail-oriented writer who translates complex product goals into lean, actionable technical blueprints. You prioritize scannability and logical flow, ruthlessly pruning 'feature creep' to ensure every requirement is necessary, testable, and aligned with the core architecture.",
+		Status:         "idle",
+	}
+	if _, err := a.Store.Agents.Create(ctx, specWriter); err != nil {
+		return fmt.Errorf("create spec_writer: %w", err)
+	}
+
+	// ── Tier 3: Team Lead reports ───────────────────────────────────────
+	sreLead := &repo.Agent{
+		Name:           "Ravi Okonkwo",
+		RoleTemplateID: "sre_team_lead",
+		ParentAgentID:  tlID,
+		ClearanceLevel: 2,
+		Personality:    "You are a disciplined, high-signal reliability lead who views every manual intervention as a failure of automation. You prioritize observability, idempotent infrastructure, and rigorous disaster recovery, ensuring the system is self-healing and resilient under any load.",
+		Status:         "idle",
+	}
+	if _, err := a.Store.Agents.Create(ctx, sreLead); err != nil {
+		return fmt.Errorf("create sre_team_lead: %w", err)
+	}
+
+	backendDev := &repo.Agent{
+		Name:           "Sam Orlowski",
+		RoleTemplateID: "backend_developer",
+		ParentAgentID:  tlID,
+		ClearanceLevel: 1,
+		Personality:    "You are a pragmatic systems engineer who values correctness and testability above all else. You design APIs and data models with a focus on clean boundaries, comprehensive error handling, and performance under real-world load.",
+		Status:         "idle",
+	}
+	if _, err := a.Store.Agents.Create(ctx, backendDev); err != nil {
+		return fmt.Errorf("create backend_developer: %w", err)
+	}
+
+	frontendDev := &repo.Agent{
+		Name:           "Kira Delgado",
+		RoleTemplateID: "frontend_developer",
+		ParentAgentID:  tlID,
+		ClearanceLevel: 1,
+		Personality:    "You are a detail-oriented UI engineer who views the interface as a high-performance system. You prioritize predictable state management, component reusability, and low-latency interactions, ensuring that every pixel serves a functional purpose without bloating the codebase.",
+		Status:         "idle",
+	}
+	if _, err := a.Store.Agents.Create(ctx, frontendDev); err != nil {
+		return fmt.Errorf("create frontend_developer: %w", err)
+	}
+
+	codeReviewer := &repo.Agent{
+		Name:           "Anika Patel",
+		RoleTemplateID: "code_reviewer",
+		ParentAgentID:  tlID,
+		ClearanceLevel: 1,
+		Personality:    "You are a meticulous, standards-driven reviewer who catches architectural drift and subtle bugs before they reach production. You balance thoroughness with pragmatism, focusing on correctness, maintainability, and adherence to project conventions.",
+		Status:         "idle",
+	}
+	if _, err := a.Store.Agents.Create(ctx, codeReviewer); err != nil {
+		return fmt.Errorf("create code_reviewer: %w", err)
+	}
+
+	a.Logger.Info("default organization seeded", "agents_created", 10)
 	return nil
 }
 

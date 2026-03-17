@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/internal/repo"
@@ -60,8 +59,13 @@ func (r *AuditRepo) ListAudits(ctx context.Context, workspaceName string) ([]*re
 
 		a.ProjectName = projectName.String
 		a.ScopeDescription = scopeDesc.String
-		a.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		a.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		var parseErr error
+		if a.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.AuditRepo.ListAudits"); parseErr != nil {
+			return nil, parseErr
+		}
+		if a.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.AuditRepo.ListAudits"); parseErr != nil {
+			return nil, parseErr
+		}
 		audits = append(audits, a)
 	}
 	if err := rows.Err(); err != nil {
@@ -94,7 +98,10 @@ func (r *AuditRepo) GetAuditItem(ctx context.Context, itemID string) (*repo.Audi
 	item.FilePath = filePath.String
 	item.SymbolName = symbolName.String
 	if reviewedAt.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", reviewedAt.String)
+		t, parseErr := parseSQLiteTime(reviewedAt.String, "sqlite.AuditRepo.GetAuditItem.reviewedAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		item.ReviewedAt = &t
 	}
 
@@ -129,7 +136,10 @@ func (r *AuditRepo) GetAuditItems(ctx context.Context, auditID string) ([]*repo.
 		item.FilePath = filePath.String
 		item.SymbolName = symbolName.String
 		if reviewedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", reviewedAt.String)
+			t, parseErr := parseSQLiteTime(reviewedAt.String, "sqlite.AuditRepo.GetAuditItems.reviewedAt")
+			if parseErr != nil {
+				return nil, parseErr
+			}
 			item.ReviewedAt = &t
 		}
 		items = append(items, item)

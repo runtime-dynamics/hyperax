@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/internal/repo"
@@ -57,8 +56,12 @@ func (r *PipelineRepo) GetPipeline(ctx context.Context, id string) (*repo.Pipeli
 
 	p.Description = description.String
 	p.ProjectName = projectName.String
-	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if p.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.PipelineRepo.GetPipeline"); err != nil {
+		return nil, err
+	}
+	if p.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.PipelineRepo.GetPipeline"); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -89,8 +92,13 @@ func (r *PipelineRepo) ListPipelines(ctx context.Context, workspaceName string) 
 
 		p.Description = description.String
 		p.ProjectName = projectName.String
-		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		var parseErr error
+		if p.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.PipelineRepo.ListPipelines"); parseErr != nil {
+			return nil, parseErr
+		}
+		if p.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.PipelineRepo.ListPipelines"); parseErr != nil {
+			return nil, parseErr
+		}
 		pipelines = append(pipelines, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -133,11 +141,17 @@ func (r *PipelineRepo) GetJob(ctx context.Context, id string) (*repo.PipelineJob
 	}
 
 	if startedAt.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", startedAt.String)
+		t, parseErr := parseSQLiteTime(startedAt.String, "sqlite.PipelineRepo.GetJob.startedAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		j.StartedAt = &t
 	}
 	if completedAt.Valid {
-		t, _ := time.Parse("2006-01-02 15:04:05", completedAt.String)
+		t, parseErr := parseSQLiteTime(completedAt.String, "sqlite.PipelineRepo.GetJob.completedAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		j.CompletedAt = &t
 	}
 	j.Error = jobError.String
@@ -199,11 +213,17 @@ func (r *PipelineRepo) ListJobs(ctx context.Context, pipelineID string) ([]*repo
 		}
 
 		if startedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", startedAt.String)
+			t, parseErr := parseSQLiteTime(startedAt.String, "sqlite.PipelineRepo.ListJobs.startedAt")
+			if parseErr != nil {
+				return nil, parseErr
+			}
 			j.StartedAt = &t
 		}
 		if completedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", completedAt.String)
+			t, parseErr := parseSQLiteTime(completedAt.String, "sqlite.PipelineRepo.ListJobs.completedAt")
+			if parseErr != nil {
+				return nil, parseErr
+			}
 			j.CompletedAt = &t
 		}
 		j.Error = jobError.String
@@ -273,11 +293,17 @@ func (r *PipelineRepo) ListStepResults(ctx context.Context, jobID string) ([]*re
 			s.ExitCode = &code
 		}
 		if startedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", startedAt.String)
+			t, parseErr := parseSQLiteTime(startedAt.String, "sqlite.PipelineRepo.ListStepResults.startedAt")
+			if parseErr != nil {
+				return nil, parseErr
+			}
 			s.StartedAt = &t
 		}
 		if completedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", completedAt.String)
+			t, parseErr := parseSQLiteTime(completedAt.String, "sqlite.PipelineRepo.ListStepResults.completedAt")
+			if parseErr != nil {
+				return nil, parseErr
+			}
 			s.CompletedAt = &t
 		}
 		if durationMS.Valid {
@@ -348,8 +374,13 @@ func (r *PipelineRepo) SearchPipelines(ctx context.Context, query string, worksp
 
 		p.Description = description.String
 		p.ProjectName = projectName.String
-		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		var parseErr error
+		if p.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.PipelineRepo.SearchPipelines"); parseErr != nil {
+			return nil, parseErr
+		}
+		if p.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.PipelineRepo.SearchPipelines"); parseErr != nil {
+			return nil, parseErr
+		}
 		pipelines = append(pipelines, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -401,11 +432,17 @@ func (r *PipelineRepo) ListJobsFiltered(ctx context.Context, pipelineID string, 
 		}
 
 		if startedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", startedAt.String)
+			t, parseErr := parseSQLiteTime(startedAt.String, "sqlite.PipelineRepo.ListJobsFiltered.startedAt")
+			if parseErr != nil {
+				return nil, parseErr
+			}
 			j.StartedAt = &t
 		}
 		if completedAt.Valid {
-			t, _ := time.Parse("2006-01-02 15:04:05", completedAt.String)
+			t, parseErr := parseSQLiteTime(completedAt.String, "sqlite.PipelineRepo.ListJobsFiltered.completedAt")
+			if parseErr != nil {
+				return nil, parseErr
+			}
 			j.CompletedAt = &t
 		}
 		j.Error = jobError.String
@@ -478,7 +515,10 @@ func (r *PipelineRepo) ListAssignments(ctx context.Context, workspaceID string, 
 		}
 
 		a.ProjectID = projectID.String
-		a.AssignedAt, _ = time.Parse("2006-01-02 15:04:05", assignedAt)
+		var parseErr error
+		if a.AssignedAt, parseErr = parseSQLiteTime(assignedAt, "sqlite.PipelineRepo.ListAssignments"); parseErr != nil {
+			return nil, parseErr
+		}
 		assignments = append(assignments, a)
 	}
 	if err := rows.Err(); err != nil {

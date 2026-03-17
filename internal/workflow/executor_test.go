@@ -339,7 +339,10 @@ func waitForRunStatus(t *testing.T, ctx context.Context, r *memWorkflowRepo, run
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	run, _ := r.GetRun(ctx, runID)
+	run, err := r.GetRun(ctx, runID)
+	if err != nil {
+		t.Fatalf("get run for status check: %v", err)
+	}
 	t.Fatalf("run %q did not reach status %q within %v (current: %q)", runID, expected, timeout, run.Status)
 }
 
@@ -505,7 +508,10 @@ func TestExecutor_SimpleLinearWorkflow(t *testing.T) {
 	waitForRunStatus(t, ctx, r, runID, types.WorkflowStatusCompleted, 5*time.Second)
 
 	// Verify all steps completed.
-	runSteps, _ := r.GetRunSteps(ctx, runID)
+	runSteps, err := r.GetRunSteps(ctx, runID)
+	if err != nil {
+		t.Fatalf("get run steps: %v", err)
+	}
 	for _, rs := range runSteps {
 		if rs.Status != types.StepStatusCompleted {
 			t.Errorf("step %s has status %q, want %q", rs.StepID, rs.Status, types.StepStatusCompleted)
@@ -545,7 +551,7 @@ func TestExecutor_ConditionSkip(t *testing.T) {
 	wfID, _ := createTestWorkflow(t, ctx, r, "conditional", []repo.WorkflowStep{
 		{Name: "step-a", StepType: "tool"},
 		{Name: "step-b", StepType: "tool", Condition: "ctx.skip == true"},
-	})
+	}) // map return intentionally unused
 
 	// Run with skip=false so step-b's condition evaluates to false.
 	runID, err := exec.StartRun(ctx, wfID, map[string]interface{}{"skip": false})
@@ -556,7 +562,10 @@ func TestExecutor_ConditionSkip(t *testing.T) {
 	waitForRunStatus(t, ctx, r, runID, types.WorkflowStatusCompleted, 5*time.Second)
 
 	// step-b should be skipped.
-	runSteps, _ := r.GetRunSteps(ctx, runID)
+	runSteps, err := r.GetRunSteps(ctx, runID)
+	if err != nil {
+		t.Fatalf("get run steps: %v", err)
+	}
 	for _, rs := range runSteps {
 		step := r.steps[rs.StepID]
 		if step.Name == "step-b" && rs.Status != types.StepStatusSkipped {
@@ -572,7 +581,7 @@ func TestExecutor_ConditionPass(t *testing.T) {
 
 	wfID, _ := createTestWorkflow(t, ctx, r, "conditional-pass", []repo.WorkflowStep{
 		{Name: "step-a", StepType: "tool", Condition: "ctx.run_it == true"},
-	})
+	}) // map return intentionally unused
 
 	// Run with run_it=true so step-a's condition passes.
 	runID, err := exec.StartRun(ctx, wfID, map[string]interface{}{"run_it": true})
@@ -583,7 +592,10 @@ func TestExecutor_ConditionPass(t *testing.T) {
 	waitForRunStatus(t, ctx, r, runID, types.WorkflowStatusCompleted, 5*time.Second)
 
 	// step-a should be completed.
-	runSteps, _ := r.GetRunSteps(ctx, runID)
+	runSteps, err := r.GetRunSteps(ctx, runID)
+	if err != nil {
+		t.Fatalf("get run steps: %v", err)
+	}
 	for _, rs := range runSteps {
 		if rs.Status != types.StepStatusCompleted {
 			t.Errorf("step should be completed, got %q", rs.Status)
@@ -609,7 +621,7 @@ func TestExecutor_ApprovalGate(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	stepAID := stepIDs["step-a"]
 	for time.Now().Before(deadline) {
-		runSteps, _ := r.GetRunSteps(ctx, runID)
+		runSteps, _ := r.GetRunSteps(ctx, runID) //nolint:errcheck // polling loop
 		for _, rs := range runSteps {
 			if rs.StepID == stepAID && rs.Status == types.StepStatusWaitingApproval {
 				goto approved
@@ -636,7 +648,7 @@ func TestExecutor_CancelRun(t *testing.T) {
 	// Create a workflow with an approval step that will block.
 	wfID, _ := createTestWorkflow(t, ctx, r, "cancel-test", []repo.WorkflowStep{
 		{Name: "blocking-step", StepType: "tool", RequiresApproval: true},
-	})
+	}) // map return intentionally unused
 
 	runID, err := exec.StartRun(ctx, wfID, nil)
 	if err != nil {
@@ -652,7 +664,10 @@ func TestExecutor_CancelRun(t *testing.T) {
 	}
 
 	// Verify run is cancelled.
-	run, _ := r.GetRun(ctx, runID)
+	run, err := r.GetRun(ctx, runID)
+	if err != nil {
+		t.Fatalf("get run: %v", err)
+	}
 	if run.Status != types.WorkflowStatusCancelled {
 		t.Errorf("run should be cancelled, got %q", run.Status)
 	}
@@ -664,10 +679,13 @@ func TestExecutor_DisabledWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	wf := &repo.Workflow{Name: "disabled", Enabled: false}
-	wfID, _ := r.CreateWorkflow(ctx, wf)
+	wfID, err := r.CreateWorkflow(ctx, wf)
+	if err != nil {
+		t.Fatalf("create workflow: %v", err)
+	}
 
-	_, err := exec.StartRun(ctx, wfID, nil)
-	if err == nil {
+	_, startErr := exec.StartRun(ctx, wfID, nil)
+	if startErr == nil {
 		t.Error("expected error for disabled workflow")
 	}
 }
@@ -678,10 +696,13 @@ func TestExecutor_EmptyWorkflow(t *testing.T) {
 	ctx := context.Background()
 
 	wf := &repo.Workflow{Name: "empty", Enabled: true}
-	wfID, _ := r.CreateWorkflow(ctx, wf)
+	wfID, err := r.CreateWorkflow(ctx, wf)
+	if err != nil {
+		t.Fatalf("create workflow: %v", err)
+	}
 
-	_, err := exec.StartRun(ctx, wfID, nil)
-	if err == nil {
+	_, startErr := exec.StartRun(ctx, wfID, nil)
+	if startErr == nil {
 		t.Error("expected error for workflow with no steps")
 	}
 }
@@ -703,7 +724,7 @@ func TestExecutor_EventsPublished(t *testing.T) {
 
 	wfID, _ := createTestWorkflow(t, ctx, r, "events", []repo.WorkflowStep{
 		{Name: "step-a", StepType: "tool"},
-	})
+	}) // map return intentionally unused
 
 	runID, err := exec.StartRun(ctx, wfID, nil)
 	if err != nil {

@@ -190,8 +190,10 @@ func TestWebhookAdapter_Send_ServerError(t *testing.T) {
 		TargetURL: srv.URL,
 		SecretRef: "secret:wh_key",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	err := a.Send(context.Background(), &types.AgentMail{
 		ID:       "err-test",
@@ -207,7 +209,9 @@ func TestWebhookAdapter_Send_ServerError(t *testing.T) {
 
 func TestWebhookAdapter_Send_NilMail(t *testing.T) {
 	a := NewWebhookAdapter(WebhookConfig{}, nil, testLogger())
-	_ = a.Start(context.Background())
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
 	err := a.Send(context.Background(), nil)
 	if err == nil {
 		t.Fatal("expected error for nil mail")
@@ -222,8 +226,10 @@ func TestWebhookAdapter_HandleInbound_ValidSignature(t *testing.T) {
 		SecretRef:   "secret:wh_inbound",
 		InboundPath: "/webhooks/agentmail",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	mail := &types.AgentMail{
 		ID:       "inbound-001",
@@ -233,7 +239,10 @@ func TestWebhookAdapter_HandleInbound_ValidSignature(t *testing.T) {
 		Payload:  json.RawMessage(`{"event":"test"}`),
 		SentAt:   time.Now(),
 	}
-	body, _ := json.Marshal(mail)
+	body, err := json.Marshal(mail)
+	if err != nil {
+		t.Fatalf("marshal mail: %v", err)
+	}
 
 	// Compute HMAC.
 	mac := hmac.New(sha256.New, []byte(secretKey))
@@ -244,7 +253,10 @@ func TestWebhookAdapter_HandleInbound_ValidSignature(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
 	req.Header.Set("X-Signature-256", sig)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -271,7 +283,10 @@ func TestWebhookAdapter_HandleInbound_ValidSignature(t *testing.T) {
 	}
 
 	// Second receive should be empty.
-	msgs2, _ := a.Receive(context.Background())
+	msgs2, err := a.Receive(context.Background())
+	if err != nil {
+		t.Fatalf("second receive: %v", err)
+	}
 	if len(msgs2) != 0 {
 		t.Fatalf("expected 0 messages after drain, got %d", len(msgs2))
 	}
@@ -282,15 +297,20 @@ func TestWebhookAdapter_HandleInbound_InvalidSignature(t *testing.T) {
 	a := NewWebhookAdapter(WebhookConfig{
 		SecretRef: "secret:wh_inbound",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	handler := a.HandleInbound()
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
 	body := []byte(`{"id":"bad-sig"}`)
-	req, _ := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
 	req.Header.Set("X-Signature-256", "sha256=0000000000000000000000000000000000000000000000000000000000000000")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -310,16 +330,24 @@ func TestWebhookAdapter_HandleInbound_MissingSignature(t *testing.T) {
 	a := NewWebhookAdapter(WebhookConfig{
 		SecretRef: "secret:wh_inbound",
 	}, reg, testLogger())
-	_ = a.Start(context.Background())
-	defer func() { _ = a.Stop() }()
+	if err := a.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	defer func() { _ = a.Stop() }() //nolint:errcheck // cleanup
 
 	handler := a.HandleInbound()
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader([]byte(`{}`)))
-	resp, _ := http.DefaultClient.Do(req)
-	defer func() { _ = resp.Body.Close() }()
+	req, err := http.NewRequest(http.MethodPost, srv.URL, bytes.NewReader([]byte(`{}`)))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // cleanup
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
@@ -332,8 +360,11 @@ func TestWebhookAdapter_HandleInbound_MethodNotAllowed(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	resp, _ := http.Get(srv.URL)
-	defer func() { _ = resp.Body.Close() }()
+	resp, err := http.Get(srv.URL) //nolint:noctx // test code, no context needed
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }() //nolint:errcheck // cleanup
 
 	if resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Fatalf("expected 405, got %d", resp.StatusCode)

@@ -220,7 +220,7 @@ export function OrgFlowChart({
       : 'light'
 
   return (
-    <div className="w-full h-full" style={{ minHeight: 'calc(100vh - 20rem)' }}>
+    <div className="w-full h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}

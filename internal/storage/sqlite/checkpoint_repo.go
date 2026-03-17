@@ -93,7 +93,10 @@ func (r *CheckpointRepo) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("sqlite.CheckpointRepo.Delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("sqlite.CheckpointRepo.Delete: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("checkpoint %q not found", id)
 	}
@@ -111,7 +114,10 @@ func (r *CheckpointRepo) DeleteOlderThan(ctx context.Context, agentID string, be
 	if err != nil {
 		return 0, fmt.Errorf("sqlite.CheckpointRepo.DeleteOlderThan: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("sqlite.CheckpointRepo.DeleteOlderThan: %w", err)
+	}
 	return int(n), nil
 }
 
@@ -130,7 +136,9 @@ func scanCheckpoint(row *sql.Row) (*repo.AgentCheckpoint, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.scanCheckpoint: %w", err)
 	}
-	cp.CheckpointedAt, _ = time.Parse(sqliteTimeFormat, checkpointedAt)
+	if cp.CheckpointedAt, err = parseSQLiteTime(checkpointedAt, "sqlite.scanCheckpoint"); err != nil {
+		return nil, err
+	}
 	return &cp, nil
 }
 
@@ -146,6 +154,8 @@ func scanCheckpointRow(rows *sql.Rows) (*repo.AgentCheckpoint, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.scanCheckpointRow: %w", err)
 	}
-	cp.CheckpointedAt, _ = time.Parse(sqliteTimeFormat, checkpointedAt)
+	if cp.CheckpointedAt, err = parseSQLiteTime(checkpointedAt, "sqlite.scanCheckpointRow"); err != nil {
+		return nil, err
+	}
 	return &cp, nil
 }

@@ -216,14 +216,19 @@ func (g *GoogleAdapter) FormatTurnMessages(rawResponse json.RawMessage, formatte
 	// Verify thoughtSignature survives in the raw parts.
 	var rawParts []json.RawMessage
 	if assistantRaw != nil {
-		_ = json.Unmarshal(assistantRaw, &rawParts)
+		if err := json.Unmarshal(assistantRaw, &rawParts); err != nil {
+			gTrace("FormatTurnMessages: failed to unmarshal assistant parts: %v", err)
+		}
 		for i, rp := range rawParts {
 			var partCheck struct {
 				FunctionCall     *json.RawMessage `json:"functionCall,omitempty"`
 				ThoughtSignature json.RawMessage  `json:"thoughtSignature,omitempty"`
 				Thought          bool             `json:"thought,omitempty"`
 			}
-			_ = json.Unmarshal(rp, &partCheck)
+			if err := json.Unmarshal(rp, &partCheck); err != nil {
+				gTrace("FormatTurnMessages: failed to unmarshal part[%d]: %v", i, err)
+				continue
+			}
 			hasFC := partCheck.FunctionCall != nil
 			hasSig := len(partCheck.ThoughtSignature) > 0
 			if hasFC || hasSig {

@@ -287,7 +287,10 @@ func TestConfigRepo_SetValue_Upsert(t *testing.T) {
 		t.Fatalf("set second: %v", err)
 	}
 
-	val, _ := repo.GetValue(ctx, "x", scope)
+	val, err := repo.GetValue(ctx, "x", scope)
+	if err != nil {
+		t.Fatalf("get value: %v", err)
+	}
 	if val != "second" {
 		t.Errorf("value = %q, want %q", val, "second")
 	}
@@ -360,13 +363,19 @@ func TestConfigRepo_ScopedValues(t *testing.T) {
 	}
 
 	// Global should return "dark"
-	val, _ := repo.GetValue(ctx, "theme", global)
+	val, err := repo.GetValue(ctx, "theme", global)
+	if err != nil {
+		t.Fatalf("get global value: %v", err)
+	}
 	if val != "dark" {
 		t.Errorf("global = %q, want dark", val)
 	}
 
 	// Agent should return "light"
-	val, _ = repo.GetValue(ctx, "theme", agent)
+	val, err = repo.GetValue(ctx, "theme", agent)
+	if err != nil {
+		t.Fatalf("get agent value: %v", err)
+	}
 	if val != "light" {
 		t.Errorf("agent = %q, want light", val)
 	}

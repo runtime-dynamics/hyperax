@@ -24,7 +24,7 @@ func respondError(w http.ResponseWriter, r *http.Request, status int, message st
 
 // decodeBody decodes the request body into the target struct.
 func decodeBody(r *http.Request, target any) error {
-	defer func() { _ = r.Body.Close() }()
+	defer r.Body.Close() //nolint:errcheck // r.Body.Close() always returns nil per net/http docs
 	return json.NewDecoder(r.Body).Decode(target)
 }
 

@@ -236,7 +236,10 @@ func (p *EncryptedFileProvider) Rotate(_ context.Context, key, newValue, scope s
 
 	if saveErr := p.saveVault(); saveErr != nil {
 		// Rollback: restore old encrypted value.
-		oldEnc, _ := p.encrypt([]byte(oldVal))
+		oldEnc, encErr := p.encrypt([]byte(oldVal))
+		if encErr != nil {
+			return "", fmt.Errorf("rotate save failed (%w) and rollback encryption also failed: %v", saveErr, encErr)
+		}
 		scopeMap[key] = oldEnc
 		return "", fmt.Errorf("rotate save: %w", saveErr)
 	}

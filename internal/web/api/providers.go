@@ -226,9 +226,16 @@ func (a *ProviderAPI) testConnection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update the provider's model list on successful discovery.
-	modelsJSON, _ := json.Marshal(models)
+	modelsJSON, err := json.Marshal(models)
+	if err != nil {
+		respondError(w, r, http.StatusInternalServerError, fmt.Sprintf("marshal models: %v", err))
+		return
+	}
 	p.Models = string(modelsJSON)
-	_ = a.repo.Update(r.Context(), id, p)
+	if err := a.repo.Update(r.Context(), id, p); err != nil {
+		respondError(w, r, http.StatusInternalServerError, fmt.Sprintf("update provider: %v", err))
+		return
+	}
 
 	resp := map[string]any{
 		"success":     true,

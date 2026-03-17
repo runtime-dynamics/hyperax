@@ -298,13 +298,18 @@ func TestTelemetryHandler_GetSessionTelemetry(t *testing.T) {
 
 	// Create a session via the mock repo.
 	sess := &types.Session{AgentID: "agent-1", Status: "active", Metadata: "{}"}
-	sessID, _ := repo.CreateSession(ctx, sess)
+	sessID, err := repo.CreateSession(ctx, sess)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
 
 	// Add a metric.
-	_ = repo.RecordToolCall(ctx, &types.ToolCallMetric{
+	if err := repo.RecordToolCall(ctx, &types.ToolCallMetric{
 		SessionID: sessID, ToolName: "search_code", StartedAt: time.Now(),
 		Duration: 100 * time.Millisecond, Success: true, Cost: 0.001,
-	})
+	}); err != nil {
+		t.Fatalf("record tool call: %v", err)
+	}
 
 	type args struct {
 		SessionID string `json:"session_id"`
@@ -350,8 +355,12 @@ func TestTelemetryHandler_GetSessionTelemetry_MissingParam(t *testing.T) {
 func TestTelemetryHandler_ListSessions(t *testing.T) {
 	h, repo, ctx := setupTelemetryHandler(t)
 
-	_, _ = repo.CreateSession(ctx, &types.Session{AgentID: "agent-1", Status: "active", Metadata: "{}"})
-	_, _ = repo.CreateSession(ctx, &types.Session{AgentID: "agent-2", Status: "active", Metadata: "{}"})
+	if _, err := repo.CreateSession(ctx, &types.Session{AgentID: "agent-1", Status: "active", Metadata: "{}"}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := repo.CreateSession(ctx, &types.Session{AgentID: "agent-2", Status: "active", Metadata: "{}"}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
 
 	type args struct {
 		Limit int `json:"limit"`
@@ -385,8 +394,12 @@ func TestTelemetryHandler_ListSessions_Empty(t *testing.T) {
 func TestTelemetryHandler_ListSessions_AgentFilter(t *testing.T) {
 	h, repo, ctx := setupTelemetryHandler(t)
 
-	_, _ = repo.CreateSession(ctx, &types.Session{AgentID: "agent-1", Status: "active", Metadata: "{}"})
-	_, _ = repo.CreateSession(ctx, &types.Session{AgentID: "agent-2", Status: "active", Metadata: "{}"})
+	if _, err := repo.CreateSession(ctx, &types.Session{AgentID: "agent-1", Status: "active", Metadata: "{}"}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if _, err := repo.CreateSession(ctx, &types.Session{AgentID: "agent-2", Status: "active", Metadata: "{}"}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
 
 	type args struct {
 		AgentID string `json:"agent_id"`
@@ -429,11 +442,16 @@ func TestTelemetryHandler_GetCostReport(t *testing.T) {
 	h, repo, ctx := setupTelemetryHandler(t)
 
 	sess := &types.Session{AgentID: "agent-1", Status: "active", Metadata: "{}"}
-	sessID, _ := repo.CreateSession(ctx, sess)
-	_ = repo.RecordToolCall(ctx, &types.ToolCallMetric{
+	sessID, err := repo.CreateSession(ctx, sess)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if err := repo.RecordToolCall(ctx, &types.ToolCallMetric{
 		SessionID: sessID, ToolName: "search_code", StartedAt: time.Now(),
 		Duration: 50 * time.Millisecond, Success: true, Cost: 0.01,
-	})
+	}); err != nil {
+		t.Fatalf("record tool call: %v", err)
+	}
 
 	result := callTelemetryTool(t, h.getCostReport, ctx, struct{}{})
 
@@ -544,10 +562,12 @@ func TestTelemetryHandler_CreateAlert_InvalidOperator(t *testing.T) {
 func TestTelemetryHandler_ListAlerts(t *testing.T) {
 	h, repo, ctx := setupTelemetryHandler(t)
 
-	_, _ = repo.CreateAlert(ctx, &types.Alert{
+	if _, err := repo.CreateAlert(ctx, &types.Alert{
 		Name: "alert-1", Metric: "session_cost", Operator: "gt",
 		Threshold: 10.0, Window: "1h", Severity: "warning", Enabled: true,
-	})
+	}); err != nil {
+		t.Fatalf("create alert: %v", err)
+	}
 
 	result := callTelemetryTool(t, h.listAlerts, ctx, struct{}{})
 
@@ -578,10 +598,13 @@ func TestTelemetryHandler_ListAlerts_Empty(t *testing.T) {
 func TestTelemetryHandler_DeleteAlert(t *testing.T) {
 	h, repo, ctx := setupTelemetryHandler(t)
 
-	alertID, _ := repo.CreateAlert(ctx, &types.Alert{
+	alertID, err := repo.CreateAlert(ctx, &types.Alert{
 		Name: "deleteme", Metric: "session_cost", Operator: "gt",
 		Threshold: 1.0, Window: "1h", Severity: "info", Enabled: true,
 	})
+	if err != nil {
+		t.Fatalf("create alert: %v", err)
+	}
 
 	type args struct {
 		AlertID string `json:"alert_id"`
@@ -598,7 +621,7 @@ func TestTelemetryHandler_DeleteAlert(t *testing.T) {
 	}
 
 	// Verify it's actually deleted.
-	_, err := repo.GetAlert(ctx, alertID)
+	_, err = repo.GetAlert(ctx, alertID)
 	if err == nil {
 		t.Error("expected error when getting deleted alert")
 	}

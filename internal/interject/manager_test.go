@@ -265,7 +265,10 @@ func TestManager_Resolve(t *testing.T) {
 		Source:   "test",
 		Reason:   "test halt",
 	}
-	id, _ := mgr.Halt(context.Background(), ij)
+	id, err := mgr.Halt(context.Background(), ij)
+	if err != nil {
+		t.Fatalf("Halt() error: %v", err)
+	}
 
 	action := &types.ResolutionAction{
 		InterjectionID: id,
@@ -296,7 +299,10 @@ func TestManager_ResolveClearanceCheck(t *testing.T) {
 		Reason:    "need clearance",
 		CreatedBy: "agent-1",
 	}
-	id, _ := mgr.Halt(context.Background(), ij)
+	id, err := mgr.Halt(context.Background(), ij)
+	if err != nil {
+		t.Fatalf("Halt() error: %v", err)
+	}
 
 	// Agent-2 has clearance 0, interjection source has clearance 1.
 	action := &types.ResolutionAction{
@@ -306,11 +312,11 @@ func TestManager_ResolveClearanceCheck(t *testing.T) {
 		ResolvedBy:     "agent-2",
 	}
 
-	err := mgr.Resolve(context.Background(), action)
-	if err == nil {
+	resolveErr := mgr.Resolve(context.Background(), action)
+	if resolveErr == nil {
 		t.Fatal("expected clearance error, got nil")
 	}
-	if !containsStr(err.Error(), "insufficient clearance") {
+	if !containsStr(resolveErr.Error(), "insufficient clearance") {
 		t.Errorf("expected insufficient clearance error, got: %v", err)
 	}
 }
@@ -325,7 +331,9 @@ func TestManager_IsHaltedGlobalAffectsAll(t *testing.T) {
 		Source:   "test",
 		Reason:   "global halt",
 	}
-	_, _ = mgr.Halt(context.Background(), ij)
+	if _, err := mgr.Halt(context.Background(), ij); err != nil {
+		t.Fatalf("Halt() error: %v", err)
+	}
 
 	// Any scope should report halted.
 	if !mgr.IsHalted(context.Background(), "workspace") {
@@ -406,7 +414,10 @@ func TestManager_DLQ(t *testing.T) {
 	}
 
 	// After replay, entry should not appear in queued list.
-	entries, _ = mgr.ListDLQ(context.Background(), "ij-1", 10)
+	entries, err = mgr.ListDLQ(context.Background(), "ij-1", 10)
+	if err != nil {
+		t.Fatalf("ListDLQ() after replay error: %v", err)
+	}
 	if len(entries) != 0 {
 		t.Errorf("expected 0 queued DLQ entries after replay, got %d", len(entries))
 	}
@@ -429,7 +440,10 @@ func TestManager_BypassGrantAndRevoke(t *testing.T) {
 		t.Fatalf("GrantBypass() error: %v", err)
 	}
 
-	active, _ := mgr.GetActiveBypasses(context.Background(), "workspace")
+	active, err := mgr.GetActiveBypasses(context.Background(), "workspace")
+	if err != nil {
+		t.Fatalf("GetActiveBypasses() error: %v", err)
+	}
 	if len(active) != 1 {
 		t.Fatalf("expected 1 active bypass, got %d", len(active))
 	}
@@ -438,7 +452,10 @@ func TestManager_BypassGrantAndRevoke(t *testing.T) {
 		t.Fatalf("RevokeBypass() error: %v", err)
 	}
 
-	active, _ = mgr.GetActiveBypasses(context.Background(), "workspace")
+	active, err = mgr.GetActiveBypasses(context.Background(), "workspace")
+	if err != nil {
+		t.Fatalf("GetActiveBypasses() after revoke error: %v", err)
+	}
 	if len(active) != 0 {
 		t.Errorf("expected 0 active bypasses after revoke, got %d", len(active))
 	}
@@ -496,7 +513,10 @@ func TestManager_CascadeHalt(t *testing.T) {
 	}
 
 	// Count total interjections created: 1 parent + 3 cascaded = 4.
-	all, _ := mgr.GetAllActive(context.Background())
+	all, err := mgr.GetAllActive(context.Background())
+	if err != nil {
+		t.Fatalf("GetAllActive() error: %v", err)
+	}
 	if len(all) != 4 {
 		t.Errorf("expected 4 active interjections (1 parent + 3 cascaded), got %d", len(all))
 	}
@@ -530,7 +550,10 @@ func TestManager_CascadeHaltNilResolver(t *testing.T) {
 	}
 
 	// Only the parent interjection should exist.
-	all, _ := mgr.GetAllActive(context.Background())
+	all, err := mgr.GetAllActive(context.Background())
+	if err != nil {
+		t.Fatalf("GetAllActive() error: %v", err)
+	}
 	if len(all) != 1 {
 		t.Errorf("expected 1 interjection (no cascade), got %d", len(all))
 	}
@@ -564,7 +587,10 @@ func TestManager_CascadeHaltWarningNoCascade(t *testing.T) {
 	}
 
 	// Only the parent interjection should exist.
-	all, _ := mgr.GetAllActive(context.Background())
+	all, err := mgr.GetAllActive(context.Background())
+	if err != nil {
+		t.Fatalf("GetAllActive() error: %v", err)
+	}
 	if len(all) != 1 {
 		t.Errorf("expected 1 interjection (no cascade for warning), got %d", len(all))
 	}

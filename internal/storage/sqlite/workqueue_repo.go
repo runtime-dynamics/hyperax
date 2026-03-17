@@ -81,7 +81,9 @@ func (r *WorkQueueRepo) Dequeue(ctx context.Context, agentName string) (*types.W
 	if err != nil {
 		return nil, fmt.Errorf("sqlite.WorkQueueRepo.Dequeue: %w", err)
 	}
-	item.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	if item.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.WorkQueueRepo.Dequeue"); err != nil {
+		return nil, err
+	}
 
 	consumedAt := time.Now().UTC()
 	item.ConsumedAt = &consumedAt

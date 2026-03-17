@@ -37,7 +37,10 @@ func TestInterjectionRepo_GetByID(t *testing.T) {
 		Source:   "agent-1",
 		Reason:   "test reason",
 	}
-	id, _ := r.Create(ctx, ij)
+	id, err := r.Create(ctx, ij)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
 
 	got, err := r.GetByID(ctx, id)
 	if err != nil {
@@ -135,9 +138,12 @@ func TestInterjectionRepo_Resolve(t *testing.T) {
 	r := &InterjectionRepo{db: db.db}
 
 	scope := "workspace:resolve-test"
-	id, _ := r.Create(ctx, &types.Interjection{
+	id, err := r.Create(ctx, &types.Interjection{
 		Scope: scope, Severity: "warning", Source: "monitor", Reason: "high latency",
 	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
 
 	action := &types.ResolutionAction{
 		InterjectionID: id,
@@ -150,13 +156,19 @@ func TestInterjectionRepo_Resolve(t *testing.T) {
 	}
 
 	// Should no longer appear in active list.
-	active, _ := r.GetActive(ctx, scope)
+	active, err := r.GetActive(ctx, scope)
+	if err != nil {
+		t.Fatalf("get active: %v", err)
+	}
 	if len(active) != 0 {
 		t.Errorf("expected 0 active after resolve, got %d", len(active))
 	}
 
 	// Should appear in history.
-	history, _ := r.GetHistory(ctx, scope, 10)
+	history, err := r.GetHistory(ctx, scope, 10)
+	if err != nil {
+		t.Fatalf("get history: %v", err)
+	}
 	if len(history) != 1 {
 		t.Fatalf("expected 1 in history, got %d", len(history))
 	}
@@ -185,15 +197,21 @@ func TestInterjectionRepo_Expire(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &InterjectionRepo{db: db.db}
 
-	id, _ := r.Create(ctx, &types.Interjection{
+	id, err := r.Create(ctx, &types.Interjection{
 		Scope: "workspace:expire", Severity: "warning", Source: "test", Reason: "expire test",
 	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
 
 	if err := r.Expire(ctx, id); err != nil {
 		t.Fatalf("expire: %v", err)
 	}
 
-	ij, _ := r.GetByID(ctx, id)
+	ij, err := r.GetByID(ctx, id)
+	if err != nil {
+		t.Fatalf("get by id: %v", err)
+	}
 	if ij.Status != "expired" {
 		t.Errorf("expected expired, got %q", ij.Status)
 	}
@@ -306,12 +324,18 @@ func TestInterjectionRepo_DLQ(t *testing.T) {
 		t.Fatalf("enqueue: %v", err)
 	}
 
-	count, _ := r.CountDLQ(ctx, "ij-1")
+	count, err := r.CountDLQ(ctx, "ij-1")
+	if err != nil {
+		t.Fatalf("count dlq: %v", err)
+	}
 	if count != 1 {
 		t.Fatalf("expected count 1, got %d", count)
 	}
 
-	entries, _ := r.ListDLQ(ctx, "ij-1", 10)
+	entries, err := r.ListDLQ(ctx, "ij-1", 10)
+	if err != nil {
+		t.Fatalf("list dlq: %v", err)
+	}
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
@@ -323,7 +347,10 @@ func TestInterjectionRepo_DLQ(t *testing.T) {
 		t.Fatalf("replay: %v", err)
 	}
 
-	count, _ = r.CountDLQ(ctx, "ij-1")
+	count, err = r.CountDLQ(ctx, "ij-1")
+	if err != nil {
+		t.Fatalf("count dlq: %v", err)
+	}
 	if count != 0 {
 		t.Errorf("expected count 0 after replay, got %d", count)
 	}
@@ -341,12 +368,18 @@ func TestInterjectionRepo_DLQDismiss(t *testing.T) {
 		Scope:          "global",
 	}
 
-	id, _ := r.EnqueueDLQ(ctx, entry)
+	id, err := r.EnqueueDLQ(ctx, entry)
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
 	if err := r.DismissDLQ(ctx, id); err != nil {
 		t.Fatalf("dismiss: %v", err)
 	}
 
-	count, _ := r.CountDLQ(ctx, "ij-2")
+	count, err := r.CountDLQ(ctx, "ij-2")
+	if err != nil {
+		t.Fatalf("count dlq: %v", err)
+	}
 	if count != 0 {
 		t.Errorf("expected 0 after dismiss, got %d", count)
 	}

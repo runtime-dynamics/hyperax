@@ -307,7 +307,10 @@ func TestOnboarder_FullOnboarding(t *testing.T) {
 	}
 
 	// Verify agent state is active.
-	state, _ := lifecycleRepo.GetState(context.Background(), "agent-1")
+	state, err := lifecycleRepo.GetState(context.Background(), "agent-1")
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
 	if state != string(StateActive) {
 		t.Errorf("expected active state, got %s", state)
 	}
@@ -382,7 +385,10 @@ func TestOnboarder_InvalidPersonaFails(t *testing.T) {
 	}
 
 	// Agent should be in error state after failed onboarding.
-	state, _ := lifecycleRepo.GetState(context.Background(), "agent-1")
+	state, err := lifecycleRepo.GetState(context.Background(), "agent-1")
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
 	if state != string(StateError) {
 		t.Errorf("expected error state after failed onboarding, got %s", state)
 	}
@@ -425,7 +431,10 @@ func TestOnboarder_NilDepsGraceful(t *testing.T) {
 		t.Errorf("expected 0 tasks with nil ProjectRepo, got %d", result.TasksAssigned)
 	}
 
-	state, _ := lifecycleRepo.GetState(context.Background(), "agent-1")
+	state, err := lifecycleRepo.GetState(context.Background(), "agent-1")
+	if err != nil {
+		t.Fatalf("get state: %v", err)
+	}
 	if state != string(StateActive) {
 		t.Errorf("expected active state, got %s", state)
 	}

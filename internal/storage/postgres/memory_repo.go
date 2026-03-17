@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"github.com/google/uuid"
@@ -72,7 +71,10 @@ func (r *MemoryRepo) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("postgres.MemoryRepo.Delete: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("postgres.MemoryRepo.Delete: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("memory %q not found", id)
 	}
@@ -396,7 +398,7 @@ func scanPgMemory(row *sql.Row) (*types.Memory, error) {
 	}
 	if metadataStr.Valid && metadataStr.String != "" {
 		if err := json.Unmarshal([]byte(metadataStr.String), &m.Metadata); err != nil {
-			slog.Error("failed to unmarshal memory metadata from database", "error", err)
+			return nil, fmt.Errorf("postgres.MemoryRepo: unmarshal metadata: %w", err)
 		}
 	}
 
@@ -436,7 +438,7 @@ func scanPgMemoryRow(rows *sql.Rows) (*types.Memory, error) {
 	}
 	if metadataStr.Valid && metadataStr.String != "" {
 		if err := json.Unmarshal([]byte(metadataStr.String), &m.Metadata); err != nil {
-			slog.Error("failed to unmarshal memory metadata from database", "error", err)
+			return nil, fmt.Errorf("postgres.MemoryRepo: unmarshal metadata: %w", err)
 		}
 	}
 

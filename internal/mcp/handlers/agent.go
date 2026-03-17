@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -495,13 +496,19 @@ func (h *AgentHandler) updateAgent(ctx context.Context, params json.RawMessage) 
 	// orphaning conversation history and hierarchy entries.
 	if existing.Name != oldName {
 		if h.store.CommHub != nil {
-			_ = h.store.CommHub.RenameAgentRefs(ctx, oldName, existing.Name)
+			if err := h.store.CommHub.RenameAgentRefs(ctx, oldName, existing.Name); err != nil {
+				slog.Warn("failed to rename agent refs in comm_log", "old", oldName, "new", existing.Name, "error", err)
+			}
 		}
 		if h.store.Sessions != nil {
-			_ = h.store.Sessions.RenameAgent(ctx, oldName, existing.Name)
+			if err := h.store.Sessions.RenameAgent(ctx, oldName, existing.Name); err != nil {
+				slog.Warn("failed to rename agent in sessions", "old", oldName, "new", existing.Name, "error", err)
+			}
 		}
 		if h.store.WorkQueue != nil {
-			_ = h.store.WorkQueue.RenameAgent(ctx, oldName, existing.Name)
+			if err := h.store.WorkQueue.RenameAgent(ctx, oldName, existing.Name); err != nil {
+				slog.Warn("failed to rename agent in work queue", "old", oldName, "new", existing.Name, "error", err)
+			}
 		}
 	}
 

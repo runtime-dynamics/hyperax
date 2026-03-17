@@ -197,7 +197,10 @@ func FetchRelease(ctx context.Context, src GitHubSource, ghToken string,
 		// server restarts (Discover reads the manifest from the plugin directory).
 		corrected, marshalErr := yaml.Marshal(manifest)
 		if marshalErr == nil {
-			_ = os.WriteFile(manifestPath, corrected, 0o644)
+			if writeErr := os.WriteFile(manifestPath, corrected, 0o644); writeErr != nil {
+				logger.Warn("failed to write corrected manifest version",
+					"plugin", manifest.Name, "error", writeErr)
+			}
 		}
 	}
 

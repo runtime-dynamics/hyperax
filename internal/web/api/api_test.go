@@ -239,7 +239,10 @@ func TestWorkspaceAPI_CRUD(t *testing.T) {
 	}
 
 	// Create
-	body, _ := json.Marshal(map[string]string{"name": "new-ws", "root_path": "/tmp/new"})
+	body, err := json.Marshal(map[string]string{"name": "new-ws", "root_path": "/tmp/new"})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
 	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -249,7 +252,10 @@ func TestWorkspaceAPI_CRUD(t *testing.T) {
 	}
 
 	// Create missing fields
-	body, _ = json.Marshal(map[string]string{"name": ""})
+	body, err = json.Marshal(map[string]string{"name": ""})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
 	req = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -272,7 +278,10 @@ func TestProviderAPI_CRUD(t *testing.T) {
 	router := NewProviderAPI(mock, &mockSecretRepo{}).Routes()
 
 	// Create
-	body, _ := json.Marshal(map[string]string{"name": "test-provider", "kind": "openai", "base_url": "https://api.openai.com"})
+	body, err := json.Marshal(map[string]string{"name": "test-provider", "kind": "openai", "base_url": "https://api.openai.com"})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -282,7 +291,9 @@ func TestProviderAPI_CRUD(t *testing.T) {
 	}
 
 	var created repo.Provider
-	_ = json.NewDecoder(rec.Body).Decode(&created)
+	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created provider: %v", err)
+	}
 	if created.ID == "" {
 		t.Fatal("expected non-empty ID")
 	}
@@ -333,7 +344,10 @@ func TestPersonaAPI_CRUD(t *testing.T) {
 	router := NewPersonaAPI(mock).Routes()
 
 	// Create
-	body, _ := json.Marshal(map[string]string{"name": "Test Agent", "role": "developer"})
+	body, err := json.Marshal(map[string]string{"name": "Test Agent", "role": "developer"})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -343,7 +357,9 @@ func TestPersonaAPI_CRUD(t *testing.T) {
 	}
 
 	var created repo.Persona
-	_ = json.NewDecoder(rec.Body).Decode(&created)
+	if err := json.NewDecoder(rec.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created persona: %v", err)
+	}
 
 	// List
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
@@ -362,7 +378,10 @@ func TestPersonaAPI_CRUD(t *testing.T) {
 	}
 
 	// Update
-	body, _ = json.Marshal(map[string]string{"name": "Updated Agent", "role": "lead"})
+	body, err = json.Marshal(map[string]string{"name": "Updated Agent", "role": "lead"})
+	if err != nil {
+		t.Fatalf("marshal body: %v", err)
+	}
 	req = httptest.NewRequest(http.MethodPut, "/"+created.ID, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()

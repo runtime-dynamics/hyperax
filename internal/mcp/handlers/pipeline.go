@@ -1005,7 +1005,10 @@ func (h *PipelineHandler) getWorkflowStatus(ctx context.Context, params json.Raw
 	}
 
 	// Build a step ID -> step name lookup.
-	steps, _ := h.store.Workflows.GetSteps(ctx, run.WorkflowID)
+	steps, err := h.store.Workflows.GetSteps(ctx, run.WorkflowID)
+	if err != nil {
+		return types.NewErrorResult(fmt.Sprintf("get steps: %v", err)), nil
+	}
 	stepNames := make(map[string]string, len(steps))
 	for _, s := range steps {
 		stepNames[s.ID] = s.Name

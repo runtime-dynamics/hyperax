@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/pkg/types"
@@ -60,7 +58,9 @@ func (r *CommHubRepo) GetRelationship(ctx context.Context, parentAgent, childAge
 		return nil, fmt.Errorf("sqlite.CommHubRepo.GetRelationship: %w", err)
 	}
 
-	rel.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	if rel.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.CommHubRepo.GetRelationship"); err != nil {
+		return nil, err
+	}
 	return rel, nil
 }
 
@@ -100,7 +100,9 @@ func (r *CommHubRepo) GetParent(ctx context.Context, childAgent string) (*types.
 		return nil, fmt.Errorf("sqlite.CommHubRepo.GetParent: %w", err)
 	}
 
-	rel.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+	if rel.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.CommHubRepo.GetParent"); err != nil {
+		return nil, err
+	}
 	return rel, nil
 }
 
@@ -146,7 +148,10 @@ func scanRelationships(rows *sql.Rows) ([]*types.AgentRelationship, error) {
 		if err := rows.Scan(&rel.ID, &rel.ParentAgent, &rel.ChildAgent, &rel.Relationship, &createdAt); err != nil {
 			return nil, fmt.Errorf("sqlite.scanRelationships: %w", err)
 		}
-		rel.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var err error
+		if rel.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.scanRelationships"); err != nil {
+			return nil, err
+		}
 		rels = append(rels, rel)
 	}
 	if err := rows.Err(); err != nil {
@@ -247,7 +252,10 @@ func scanCommLogEntries(rows *sql.Rows) ([]*types.CommLogEntry, error) {
 				return nil, fmt.Errorf("sqlite.scanCommLogEntries: %w", err)
 			}
 		}
-		e.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var parseErr error
+		if e.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.scanCommLogEntries"); parseErr != nil {
+			return nil, parseErr
+		}
 		entries = append(entries, e)
 	}
 	if err := rows.Err(); err != nil {
@@ -378,7 +386,10 @@ func (r *CommHubRepo) ListPermissions(ctx context.Context, agentID string) ([]*t
 		if err := rows.Scan(&p.ID, &p.AgentID, &p.TargetID, &p.Permission, &createdAt); err != nil {
 			return nil, fmt.Errorf("sqlite.CommHubRepo.ListPermissions: %w", err)
 		}
-		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var parseErr error
+		if p.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.CommHubRepo.ListPermissions"); parseErr != nil {
+			return nil, parseErr
+		}
 		perms = append(perms, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -440,12 +451,15 @@ func (r *CommHubRepo) DrainOverflow(ctx context.Context, agentID string, limit i
 			return nil, fmt.Errorf("sqlite.CommHubRepo.DrainOverflow: %w", err)
 		}
 		if err := json.Unmarshal([]byte(metaJSON), &e.Metadata); err != nil {
-			slog.Error("failed to unmarshal overflow metadata from database", "error", err)
+			return nil, fmt.Errorf("sqlite.CommHubRepo.DrainOverflow: unmarshal metadata: %w", err)
 		}
 		if e.Metadata == nil {
 			e.Metadata = make(map[string]string)
 		}
-		e.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		var parseErr error
+		if e.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.CommHubRepo.DrainOverflow"); parseErr != nil {
+			return nil, parseErr
+		}
 		entries = append(entries, e)
 		ids = append(ids, e.ID)
 	}
@@ -456,7 +470,7 @@ func (r *CommHubRepo) DrainOverflow(ctx context.Context, agentID string, limit i
 	// Mark as retrieved.
 	for _, id := range ids {
 		if _, err := r.db.ExecContext(ctx, "UPDATE commhub_overflow SET retrieved = 1 WHERE id = ?", id); err != nil {
-			slog.Error("failed to mark overflow as retrieved — may cause duplicate delivery", "id", id, "error", err)
+			return nil, fmt.Errorf("sqlite.CommHubRepo.DrainOverflow: mark retrieved id=%v: %w", id, err)
 		}
 	}
 

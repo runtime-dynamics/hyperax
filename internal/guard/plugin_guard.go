@@ -38,11 +38,14 @@ func (g *PluginGuard) Name() string {
 }
 
 func (g *PluginGuard) Evaluate(ctx context.Context, req *EvalRequest) (bool, error) {
-	params, _ := json.Marshal(map[string]any{
+	params, err := json.Marshal(map[string]any{
 		"tool_name":   req.ToolName,
 		"tool_action": req.ToolAction,
 		"tool_params": req.ToolParams,
 	})
+	if err != nil {
+		return false, fmt.Errorf("guard.PluginGuard.Evaluate: marshal params: %w", err)
+	}
 
 	result, err := g.dispatch(ctx, g.toolName, params)
 	if err != nil {

@@ -159,10 +159,15 @@ func (a *DiscordAdapter) Send(ctx context.Context, mail *types.AgentMail) error 
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if readErr != nil {
+			return fmt.Errorf("discord API error (status %d, body unreadable: %v)", resp.StatusCode, readErr)
+		}
 		return fmt.Errorf("discord API error (status %d): %s", resp.StatusCode, string(body))
 	}
-	io.Copy(io.Discard, resp.Body) //nolint:errcheck
+	if _, drainErr := io.Copy(io.Discard, resp.Body); drainErr != nil {
+		a.logger.Debug("failed to drain discord response body", "error", drainErr)
+	}
 
 	a.logger.Debug("discord message sent", "mail_id", mail.ID, "channel", a.config.DefaultChannelID)
 	return nil
@@ -204,7 +209,9 @@ func (a *DiscordAdapter) Receive(ctx context.Context) ([]*types.AgentMail, error
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		io.Copy(io.Discard, resp.Body) //nolint:errcheck
+		if _, drainErr := io.Copy(io.Discard, resp.Body); drainErr != nil {
+			a.logger.Debug("failed to drain discord error response body", "error", drainErr)
+		}
 		return nil, fmt.Errorf("discord API error: status %d", resp.StatusCode)
 	}
 
@@ -231,13 +238,17 @@ func (a *DiscordAdapter) Receive(ctx context.Context) ([]*types.AgentMail, error
 			continue
 		}
 
-		payload, _ := json.Marshal(map[string]string{
+		payload, marshalErr := json.Marshal(map[string]string{
 			"content":    msg.Content,
 			"author_id":  msg.Author.ID,
 			"author":     msg.Author.Username,
 			"message_id": msg.ID,
 			"channel_id": a.config.DefaultChannelID,
 		})
+		if marshalErr != nil {
+			a.logger.Warn("failed to marshal discord message payload", "message_id", msg.ID, "error", marshalErr)
+			continue
+		}
 
 		mail := &types.AgentMail{
 			ID:          fmt.Sprintf("discord-%s-%s", a.config.DefaultChannelID, msg.ID),
@@ -287,7 +298,9 @@ func (a *DiscordAdapter) validateToken(ctx context.Context) error {
 		return fmt.Errorf("adapters.DiscordAdapter.validateToken: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	io.Copy(io.Discard, resp.Body) //nolint:errcheck
+	if _, drainErr := io.Copy(io.Discard, resp.Body); drainErr != nil {
+		a.logger.Debug("failed to drain discord validation response body", "error", drainErr)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("discord returned status %d for token validation", resp.StatusCode)

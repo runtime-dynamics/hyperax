@@ -143,7 +143,12 @@ func buildInputSchemaFromToolDef(tool types.ToolDef) json.RawMessage {
 		schema["required"] = []string{}
 	}
 
-	data, _ := json.Marshal(schema)
+	data, err := json.Marshal(schema)
+	if err != nil {
+		// Schema is built from known types; marshal failure is highly unexpected.
+		// Return a minimal valid schema as a safe fallback.
+		return json.RawMessage(`{"type":"object","properties":{},"required":[]}`)
+	}
 	return data
 }
 

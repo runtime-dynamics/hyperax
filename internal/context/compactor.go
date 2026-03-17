@@ -224,7 +224,7 @@ func (c *Compactor) summariseOlderTurns(turns []CompactMessage) string {
 		}
 		sb.WriteString(strings.Join(userQueries[:limit], "; "))
 		if len(userQueries) > 5 {
-			sb.WriteString(fmt.Sprintf(" (and %d more topics)", len(userQueries)-5))
+			fmt.Fprintf(&sb, " (and %d more topics)", len(userQueries)-5)
 		}
 		sb.WriteString("\n")
 	}
@@ -237,7 +237,7 @@ func (c *Compactor) summariseOlderTurns(turns []CompactMessage) string {
 		}
 		sb.WriteString(strings.Join(assistantActions[:limit], "; "))
 		if len(assistantActions) > 5 {
-			sb.WriteString(fmt.Sprintf(" (and %d more)", len(assistantActions)-5))
+			fmt.Fprintf(&sb, " (and %d more)", len(assistantActions)-5)
 		}
 		sb.WriteString("\n")
 	}
@@ -250,7 +250,7 @@ func (c *Compactor) summariseOlderTurns(turns []CompactMessage) string {
 		}
 		sb.WriteString(strings.Join(toolResults[:limit], ", "))
 		if len(toolResults) > 10 {
-			sb.WriteString(fmt.Sprintf(" (+%d more)", len(toolResults)-10))
+			fmt.Fprintf(&sb, " (+%d more)", len(toolResults)-10)
 		}
 		sb.WriteString("\n")
 	}

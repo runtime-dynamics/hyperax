@@ -44,8 +44,8 @@ export interface StepResult {
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-export function usePipelines(workspace = 'hyperax') {
-  const ws = workspace || 'hyperax'
+export function usePipelines(workspace = '_org') {
+  const ws = workspace || '_org'
   return useQuery({
     queryKey: ['pipelines', ws],
     queryFn: async () => {

@@ -344,7 +344,10 @@ func TestCommHubRepo_RevokePermission(t *testing.T) {
 		t.Fatalf("revoke: %v", err)
 	}
 
-	ok, _ := r.CheckPermission(ctx, "a", "b")
+	ok, err := r.CheckPermission(ctx, "a", "b")
+	if err != nil {
+		t.Fatalf("check permission: %v", err)
+	}
 	if ok {
 		t.Error("expected permission to be revoked")
 	}

@@ -90,14 +90,18 @@ func (e *AlertEvaluator) Evaluate(ctx context.Context) ([]*types.AlertFiring, er
 
 		// Publish alert event to the EventBus.
 		if e.bus != nil {
-			payload, _ := json.Marshal(firing)
-			e.bus.Publish(types.NervousEvent{
-				Type:      types.EventTelemetryAlert,
-				Source:    "telemetry.alert_evaluator",
-				Scope:     alert.Severity,
-				Payload:   payload,
-				Timestamp: now,
-			})
+			payload, marshalErr := json.Marshal(firing)
+			if marshalErr != nil {
+				e.logger.Error("failed to marshal alert firing payload", "alert_id", alert.ID, "error", marshalErr)
+			} else {
+				e.bus.Publish(types.NervousEvent{
+					Type:      types.EventTelemetryAlert,
+					Source:    "telemetry.alert_evaluator",
+					Scope:     alert.Severity,
+					Payload:   payload,
+					Timestamp: now,
+				})
+			}
 		}
 	}
 

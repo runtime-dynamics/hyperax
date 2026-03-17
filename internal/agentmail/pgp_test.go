@@ -52,7 +52,10 @@ func TestKeyPairBase64Roundtrip(t *testing.T) {
 }
 
 func TestSignAndVerify(t *testing.T) {
-	kp, _ := GenerateKeyPair()
+	kp, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair: %v", err)
+	}
 	mail := newTestMail()
 
 	if err := SignMail(mail, kp.PrivateKey); err != nil {
@@ -69,10 +72,15 @@ func TestSignAndVerify(t *testing.T) {
 }
 
 func TestVerifyDetectsTampering(t *testing.T) {
-	kp, _ := GenerateKeyPair()
+	kp, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair: %v", err)
+	}
 	mail := newTestMail()
 
-	_ = SignMail(mail, kp.PrivateKey)
+	if err := SignMail(mail, kp.PrivateKey); err != nil {
+		t.Fatalf("SignMail: %v", err)
+	}
 
 	// Tamper with the payload.
 	mail.Payload = json.RawMessage(`{"action":"tampered"}`)
@@ -83,11 +91,19 @@ func TestVerifyDetectsTampering(t *testing.T) {
 }
 
 func TestVerifyRejectsWrongKey(t *testing.T) {
-	kp1, _ := GenerateKeyPair()
-	kp2, _ := GenerateKeyPair()
+	kp1, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair 1: %v", err)
+	}
+	kp2, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair 2: %v", err)
+	}
 	mail := newTestMail()
 
-	_ = SignMail(mail, kp1.PrivateKey)
+	if err := SignMail(mail, kp1.PrivateKey); err != nil {
+		t.Fatalf("SignMail: %v", err)
+	}
 
 	if err := VerifyMail(mail, kp2.PublicKey); err == nil {
 		t.Fatal("expected verification to fail with wrong public key")
@@ -127,7 +143,9 @@ func TestDecryptWithWrongSecret(t *testing.T) {
 	secret2 := []byte("secret-two-bbbbbbbbbbbbbbbbbbbbbb")
 	mail := newTestMail()
 
-	_ = EncryptPayload(mail, secret1)
+	if err := EncryptPayload(mail, secret1); err != nil {
+		t.Fatalf("EncryptPayload: %v", err)
+	}
 
 	if err := DecryptPayload(mail, secret2); err == nil {
 		t.Fatal("expected decryption to fail with wrong secret")
@@ -135,7 +153,10 @@ func TestDecryptWithWrongSecret(t *testing.T) {
 }
 
 func TestSealAndOpenEnvelope(t *testing.T) {
-	kp, _ := GenerateKeyPair()
+	kp, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair: %v", err)
+	}
 	secret := []byte("envelope-shared-secret-test-1234")
 	mail := newTestMail()
 	original := string(mail.Payload)
@@ -164,7 +185,10 @@ func TestSealAndOpenEnvelope(t *testing.T) {
 }
 
 func TestSealEnvelopeSignOnly(t *testing.T) {
-	kp, _ := GenerateKeyPair()
+	kp, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair: %v", err)
+	}
 	mail := newTestMail()
 
 	if err := SealEnvelope(mail, kp, nil); err != nil {
@@ -184,7 +208,10 @@ func TestSealEnvelopeSignOnly(t *testing.T) {
 }
 
 func TestSignMailNilErrors(t *testing.T) {
-	kp, _ := GenerateKeyPair()
+	kp, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair: %v", err)
+	}
 
 	if err := SignMail(nil, kp.PrivateKey); err == nil {
 		t.Fatal("expected error for nil mail")
@@ -192,7 +219,10 @@ func TestSignMailNilErrors(t *testing.T) {
 }
 
 func TestVerifyMailNoSignature(t *testing.T) {
-	kp, _ := GenerateKeyPair()
+	kp, err := GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateKeyPair: %v", err)
+	}
 	mail := newTestMail()
 
 	if err := VerifyMail(mail, kp.PublicKey); err == nil {

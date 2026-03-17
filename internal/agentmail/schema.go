@@ -3,6 +3,7 @@ package agentmail
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -365,7 +366,12 @@ func (r *SchemaRegistry) RegisterBuiltinSchemas() {
 	}
 
 	for _, schema := range builtins {
-		_ = r.Register(schema) // ignore errors for idempotent re-registration
+		if err := r.Register(schema); err != nil {
+			// Expected for idempotent re-registration; only log unexpected errors.
+			if r.Get(schema.SchemaID) == nil {
+				slog.Warn("failed to register builtin schema", "schema_id", schema.SchemaID, "error", err)
+			}
+		}
 	}
 }
 

@@ -21,13 +21,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/hyperax/hyperax/internal/agentmail"
 	"github.com/hyperax/hyperax/internal/secrets"
 	"github.com/hyperax/hyperax/pkg/types"
 )
-
-// Compile-time interface assertion.
-var _ agentmail.MessengerAdapter = (*EmailAdapter)(nil)
 
 // EmailConfig holds configuration for the EmailAdapter.
 type EmailConfig struct {
@@ -69,14 +65,14 @@ type EmailConfig struct {
 // Outbound: SMTP with STARTTLS for message delivery.
 // Inbound: IMAP polling for unseen messages with MIME multipart parsing.
 type EmailAdapter struct {
-	config    EmailConfig
-	secrets   *secrets.Registry
-	logger    *slog.Logger
-	healthy   atomic.Bool
-	started   atomic.Bool
-	lastUID   uint32 // last seen IMAP UID for incremental polling
-	mu        sync.Mutex
-	stopOnce  sync.Once
+	config   EmailConfig
+	secrets  *secrets.Registry
+	logger   *slog.Logger
+	healthy  atomic.Bool
+	started  atomic.Bool
+	lastUID  uint32 // last seen IMAP UID for incremental polling
+	mu       sync.Mutex
+	stopOnce sync.Once
 }
 
 // NewEmailAdapter creates an EmailAdapter with the given configuration.
@@ -240,7 +236,9 @@ func (a *EmailAdapter) Receive(ctx context.Context) ([]*types.AgentMail, error) 
 
 	uids := parseSearchUIDs(searchResp, sinceUID > 0)
 	if len(uids) == 0 {
-		_ = a.imapLogout(conn)
+		if logoutErr := a.imapLogout(conn); logoutErr != nil {
+			a.logger.Debug("imap logout error after empty search", "error", logoutErr)
+		}
 		return nil, nil
 	}
 
@@ -264,7 +262,11 @@ func (a *EmailAdapter) Receive(ctx context.Context) ([]*types.AgentMail, error) 
 			continue
 		}
 
-		payload, _ := json.Marshal(parsed)
+		payload, marshalErr := json.Marshal(parsed)
+		if marshalErr != nil {
+			a.logger.Warn("failed to marshal parsed email", "uid", uid, "error", marshalErr)
+			continue
+		}
 		agentMail := &types.AgentMail{
 			ID:          fmt.Sprintf("email-%s-%d", a.config.IMAPHost, uid),
 			From:        fmt.Sprintf("email:%s", parsed.From),
@@ -282,7 +284,9 @@ func (a *EmailAdapter) Receive(ctx context.Context) ([]*types.AgentMail, error) 
 		}
 	}
 
-	_ = a.imapLogout(conn)
+	if logoutErr := a.imapLogout(conn); logoutErr != nil {
+		a.logger.Debug("imap logout error after fetch", "error", logoutErr)
+	}
 
 	if maxUID > 0 {
 		a.mu.Lock()
@@ -334,7 +338,9 @@ func (a *EmailAdapter) validateIMAP(ctx context.Context) error {
 		return fmt.Errorf("adapters.EmailAdapter.validateIMAP: %w", err)
 	}
 
-	_ = a.imapLogout(conn)
+	if logoutErr := a.imapLogout(conn); logoutErr != nil {
+		a.logger.Debug("imap logout error during validation", "error", logoutErr)
+	}
 	return nil
 }
 
@@ -383,7 +389,9 @@ func (a *EmailAdapter) connectIMAP() (*imapConn, error) {
 
 	// Read server greeting.
 	if _, err := conn.readLine(); err != nil {
-		_ = rawConn.Close()
+		if closeErr := rawConn.Close(); closeErr != nil {
+			slog.Debug("failed to close raw connection after greeting error", "error", closeErr)
+		}
 		return nil, fmt.Errorf("read greeting: %w", err)
 	}
 
@@ -474,7 +482,10 @@ func (c *imapConn) readLine() (string, error) {
 			}
 			line = line[:idx] + string(literal)
 			// Read the trailing line after the literal.
-			trailing, _ := c.reader.ReadString('\n')
+			trailing, trailingErr := c.reader.ReadString('\n')
+			if trailingErr != nil && trailing == "" {
+				return line, fmt.Errorf("read trailing line after literal: %w", trailingErr)
+			}
 			line += strings.TrimRight(trailing, "\r\n")
 		}
 	}
@@ -498,13 +509,25 @@ func defaultSMTPSendMail(addr string, auth smtp.Auth, from string, to []string, 
 		return fmt.Errorf("dial %s: %w", addr, err)
 	}
 
-	host, _, _ := net.SplitHostPort(addr)
+	host, _, splitErr := net.SplitHostPort(addr)
+	if splitErr != nil {
+		if closeErr := conn.Close(); closeErr != nil {
+			return fmt.Errorf("split host:port %q: %w (also failed to close conn: %v)", addr, splitErr, closeErr)
+		}
+		return fmt.Errorf("split host:port %q: %w", addr, splitErr)
+	}
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
-		conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			return fmt.Errorf("smtp client: %w (also failed to close conn: %v)", err, closeErr)
+		}
 		return fmt.Errorf("smtp client: %w", err)
 	}
-	defer func() { _ = client.Close() }()
+	defer func() {
+		if closeErr := client.Close(); closeErr != nil {
+			slog.Warn("failed to close SMTP client", "error", closeErr, "addr", addr)
+		}
+	}()
 
 	if err := client.Hello("hyperax"); err != nil {
 		return fmt.Errorf("ehlo: %w", err)
@@ -550,13 +573,13 @@ func defaultSMTPSendMail(addr string, auth smtp.Auth, from string, to []string, 
 // buildMIMEMessage constructs a basic RFC 2822 email message.
 func buildMIMEMessage(from, to, subject, body string) []byte {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("From: %s\r\n", from))
-	b.WriteString(fmt.Sprintf("To: %s\r\n", to))
-	b.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	fmt.Fprintf(&b, "From: %s\r\n", from)
+	fmt.Fprintf(&b, "To: %s\r\n", to)
+	fmt.Fprintf(&b, "Subject: %s\r\n", subject)
 	b.WriteString("MIME-Version: 1.0\r\n")
 	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
 	b.WriteString("Content-Transfer-Encoding: base64\r\n")
-	b.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().UTC().Format(time.RFC1123Z)))
+	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().UTC().Format(time.RFC1123Z))
 	b.WriteString("X-Mailer: HyperAX-AgentMail/1.0\r\n")
 	b.WriteString("\r\n")
 	b.WriteString(base64.StdEncoding.EncodeToString([]byte(body)))
@@ -566,11 +589,11 @@ func buildMIMEMessage(from, to, subject, body string) []byte {
 // formatMailBody creates a human-readable text representation of an AgentMail.
 func formatMailBody(mail *types.AgentMail) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("AgentMail ID: %s\n", mail.ID))
-	b.WriteString(fmt.Sprintf("From: %s\n", mail.From))
-	b.WriteString(fmt.Sprintf("To: %s\n", mail.To))
-	b.WriteString(fmt.Sprintf("Priority: %s\n", mail.Priority))
-	b.WriteString(fmt.Sprintf("Sent: %s\n", mail.SentAt.Format(time.RFC3339)))
+	fmt.Fprintf(&b, "AgentMail ID: %s\n", mail.ID)
+	fmt.Fprintf(&b, "From: %s\n", mail.From)
+	fmt.Fprintf(&b, "To: %s\n", mail.To)
+	fmt.Fprintf(&b, "Priority: %s\n", mail.Priority)
+	fmt.Fprintf(&b, "Sent: %s\n", mail.SentAt.Format(time.RFC3339))
 
 	payloadStr := string(mail.Payload)
 	if payloadStr != "" && payloadStr != "null" {
@@ -619,7 +642,11 @@ func parseEmailMessage(lines []string) *parsedEmail {
 	to := msg.Header.Get("To")
 	subject := msg.Header.Get("Subject")
 	dateStr := msg.Header.Get("Date")
-	date, _ := mail.ParseDate(dateStr)
+	date, dateErr := mail.ParseDate(dateStr)
+	if dateErr != nil {
+		// Use zero time for unparseable dates; the message is still usable.
+		date = time.Time{}
+	}
 
 	result := &parsedEmail{
 		From:    from,
@@ -668,7 +695,16 @@ func parseEmailMessage(lines []string) *parsedEmail {
 
 		if filename != "" {
 			// Attachment — record metadata only, skip content to save memory.
-			data, _ := io.ReadAll(io.LimitReader(part, 10<<20))
+			data, readErr := io.ReadAll(io.LimitReader(part, 10<<20))
+			if readErr != nil {
+				// Skip unreadable attachments but still record metadata with zero size.
+				result.Attachments = append(result.Attachments, emailAttachment{
+					Filename:    filename,
+					ContentType: partType,
+					Size:        0,
+				})
+				continue
+			}
 			result.Attachments = append(result.Attachments, emailAttachment{
 				Filename:    filename,
 				ContentType: partType,

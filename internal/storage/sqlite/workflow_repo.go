@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/internal/repo"
@@ -64,8 +63,12 @@ func (r *WorkflowRepo) GetWorkflow(ctx context.Context, id string) (*repo.Workfl
 	}
 
 	wf.Enabled = enabled == 1
-	wf.CreatedAt, _ = time.Parse(sqliteTimeFmt, createdAt)
-	wf.UpdatedAt, _ = time.Parse(sqliteTimeFmt, updatedAt)
+	if wf.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.WorkflowRepo.GetWorkflow"); err != nil {
+		return nil, err
+	}
+	if wf.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.WorkflowRepo.GetWorkflow"); err != nil {
+		return nil, err
+	}
 
 	return wf, nil
 }
@@ -92,8 +95,13 @@ func (r *WorkflowRepo) ListWorkflows(ctx context.Context) ([]*repo.Workflow, err
 		}
 
 		wf.Enabled = enabled == 1
-		wf.CreatedAt, _ = time.Parse(sqliteTimeFmt, createdAt)
-		wf.UpdatedAt, _ = time.Parse(sqliteTimeFmt, updatedAt)
+		var parseErr error
+		if wf.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.WorkflowRepo.ListWorkflows"); parseErr != nil {
+			return nil, parseErr
+		}
+		if wf.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.WorkflowRepo.ListWorkflows"); parseErr != nil {
+			return nil, parseErr
+		}
 
 		workflows = append(workflows, wf)
 	}
@@ -216,8 +224,13 @@ func (r *WorkflowRepo) GetSteps(ctx context.Context, workflowID string) ([]*repo
 
 		s.Action = json.RawMessage(action)
 		s.RequiresApproval = approval == 1
-		s.CreatedAt, _ = time.Parse(sqliteTimeFmt, createdAt)
-		s.UpdatedAt, _ = time.Parse(sqliteTimeFmt, updatedAt)
+		var parseErr error
+		if s.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.WorkflowRepo.GetSteps"); parseErr != nil {
+			return nil, parseErr
+		}
+		if s.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.WorkflowRepo.GetSteps"); parseErr != nil {
+			return nil, parseErr
+		}
 
 		steps = append(steps, s)
 	}
@@ -346,16 +359,26 @@ func (r *WorkflowRepo) GetRun(ctx context.Context, id string) (*repo.WorkflowRun
 		run.Error = errMsg.String
 	}
 	if startedAt.Valid {
-		t, _ := time.Parse(sqliteTimeFmt, startedAt.String)
+		t, parseErr := parseSQLiteTime(startedAt.String, "sqlite.WorkflowRepo.GetRun.startedAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		run.StartedAt = &t
 	}
 	if finishedAt.Valid {
-		t, _ := time.Parse(sqliteTimeFmt, finishedAt.String)
+		t, parseErr := parseSQLiteTime(finishedAt.String, "sqlite.WorkflowRepo.GetRun.finishedAt")
+		if parseErr != nil {
+			return nil, parseErr
+		}
 		run.FinishedAt = &t
 	}
 	run.Context = json.RawMessage(runCtx)
-	run.CreatedAt, _ = time.Parse(sqliteTimeFmt, createdAt)
-	run.UpdatedAt, _ = time.Parse(sqliteTimeFmt, updatedAt)
+	if run.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.WorkflowRepo.GetRun"); err != nil {
+		return nil, err
+	}
+	if run.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.WorkflowRepo.GetRun"); err != nil {
+		return nil, err
+	}
 
 	return run, nil
 }
@@ -392,17 +415,28 @@ func (r *WorkflowRepo) ListRuns(ctx context.Context, workflowID string) ([]*repo
 		if errMsg.Valid {
 			run.Error = errMsg.String
 		}
+		var parseErr error
 		if startedAt.Valid {
-			t, _ := time.Parse(sqliteTimeFmt, startedAt.String)
+			t, pErr := parseSQLiteTime(startedAt.String, "sqlite.WorkflowRepo.ListRuns.startedAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			run.StartedAt = &t
 		}
 		if finishedAt.Valid {
-			t, _ := time.Parse(sqliteTimeFmt, finishedAt.String)
+			t, pErr := parseSQLiteTime(finishedAt.String, "sqlite.WorkflowRepo.ListRuns.finishedAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			run.FinishedAt = &t
 		}
 		run.Context = json.RawMessage(runCtx)
-		run.CreatedAt, _ = time.Parse(sqliteTimeFmt, createdAt)
-		run.UpdatedAt, _ = time.Parse(sqliteTimeFmt, updatedAt)
+		if run.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.WorkflowRepo.ListRuns"); parseErr != nil {
+			return nil, parseErr
+		}
+		if run.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.WorkflowRepo.ListRuns"); parseErr != nil {
+			return nil, parseErr
+		}
 
 		runs = append(runs, run)
 	}
@@ -499,16 +533,27 @@ func (r *WorkflowRepo) GetRunSteps(ctx context.Context, runID string) ([]*repo.W
 			return nil, fmt.Errorf("sqlite.WorkflowRepo.GetRunSteps: %w", err)
 		}
 
+		var parseErr error
 		if startedAt.Valid {
-			t, _ := time.Parse(sqliteTimeFmt, startedAt.String)
+			t, pErr := parseSQLiteTime(startedAt.String, "sqlite.WorkflowRepo.GetRunSteps.startedAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			rs.StartedAt = &t
 		}
 		if finishedAt.Valid {
-			t, _ := time.Parse(sqliteTimeFmt, finishedAt.String)
+			t, pErr := parseSQLiteTime(finishedAt.String, "sqlite.WorkflowRepo.GetRunSteps.finishedAt")
+			if pErr != nil {
+				return nil, pErr
+			}
 			rs.FinishedAt = &t
 		}
-		rs.CreatedAt, _ = time.Parse(sqliteTimeFmt, createdAt)
-		rs.UpdatedAt, _ = time.Parse(sqliteTimeFmt, updatedAt)
+		if rs.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.WorkflowRepo.GetRunSteps"); parseErr != nil {
+			return nil, parseErr
+		}
+		if rs.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.WorkflowRepo.GetRunSteps"); parseErr != nil {
+			return nil, parseErr
+		}
 
 		steps = append(steps, rs)
 	}
@@ -615,8 +660,13 @@ func (r *WorkflowRepo) ListTriggers(ctx context.Context, workflowID string) ([]*
 
 		tr.Config = json.RawMessage(config)
 		tr.Enabled = enabled == 1
-		tr.CreatedAt, _ = time.Parse(sqliteTimeFmt, createdAt)
-		tr.UpdatedAt, _ = time.Parse(sqliteTimeFmt, updatedAt)
+		var parseErr error
+		if tr.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.WorkflowRepo.ListTriggers"); parseErr != nil {
+			return nil, parseErr
+		}
+		if tr.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.WorkflowRepo.ListTriggers"); parseErr != nil {
+			return nil, parseErr
+		}
 
 		triggers = append(triggers, tr)
 	}

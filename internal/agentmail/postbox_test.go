@@ -160,7 +160,7 @@ func (r *testAgentMailRepo) Dequeue(ctx context.Context, direction string, limit
 		m.Payload = json.RawMessage(payload)
 		m.Encrypted = encrypted != 0
 		m.AckDeadline = time.Duration(ackMs) * time.Millisecond
-		m.SentAt, _ = time.Parse(sqliteTimeFormat, sentAt)
+		m.SentAt, _ = time.Parse(sqliteTimeFormat, sentAt) //nolint:errcheck // test repo, format is controlled
 		msgs = append(msgs, m)
 		ids = append(ids, m.ID)
 	}
@@ -206,7 +206,7 @@ func (r *testAgentMailRepo) Peek(ctx context.Context, direction string, limit in
 		m.Payload = json.RawMessage(payload)
 		m.Encrypted = encrypted != 0
 		m.AckDeadline = time.Duration(ackMs) * time.Millisecond
-		m.SentAt, _ = time.Parse(sqliteTimeFormat, sentAt)
+		m.SentAt, _ = time.Parse(sqliteTimeFormat, sentAt) //nolint:errcheck // test repo, format is controlled
 		msgs = append(msgs, m)
 	}
 	return msgs, nil
@@ -232,7 +232,7 @@ func (r *testAgentMailRepo) GetByID(ctx context.Context, id string) (*types.Agen
 	m.Payload = json.RawMessage(payload)
 	m.Encrypted = encrypted != 0
 	m.AckDeadline = time.Duration(ackMs) * time.Millisecond
-	m.SentAt, _ = time.Parse(sqliteTimeFormat, sentAt)
+	m.SentAt, _ = time.Parse(sqliteTimeFormat, sentAt) //nolint:errcheck // test repo, format is controlled
 	return m, nil
 }
 
@@ -241,7 +241,7 @@ func (r *testAgentMailRepo) Delete(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
+	n, _ := res.RowsAffected() //nolint:errcheck // SQLite always supports RowsAffected
 	if n == 0 {
 		return fmt.Errorf("mail %q not found", id)
 	}
@@ -279,7 +279,7 @@ func (r *testAgentMailRepo) GetAck(ctx context.Context, mailID string) (*types.M
 	if err != nil {
 		return nil, err
 	}
-	ack.AckedAt, _ = time.Parse(sqliteTimeFormat, ackedAt)
+	ack.AckedAt, _ = time.Parse(sqliteTimeFormat, ackedAt) //nolint:errcheck // test repo, format is controlled
 	return ack, nil
 }
 
@@ -296,7 +296,10 @@ func (r *testAgentMailRepo) QuarantineToDLO(ctx context.Context, entry *types.De
 	}
 	originalJSON := "{}"
 	if entry.OriginalMail != nil {
-		data, _ := json.Marshal(entry.OriginalMail)
+		data, marshalErr := json.Marshal(entry.OriginalMail)
+		if marshalErr != nil {
+			return fmt.Errorf("marshal original mail: %w", marshalErr)
+		}
 		originalJSON = string(data)
 	}
 	_, err := r.db.ExecContext(ctx,
@@ -323,7 +326,7 @@ func (r *testAgentMailRepo) ListDLO(ctx context.Context, limit int) ([]*types.De
 		if err := rows.Scan(&e.ID, &e.MailID, &e.Reason, &e.Attempts, &qa, &orig); err != nil {
 			return nil, err
 		}
-		e.QuarantinedAt, _ = time.Parse(sqliteTimeFormat, qa)
+		e.QuarantinedAt, _ = time.Parse(sqliteTimeFormat, qa) //nolint:errcheck // test repo, format is controlled
 		if orig != "" && orig != "{}" {
 			var m types.AgentMail
 			if err := json.Unmarshal([]byte(orig), &m); err == nil {
@@ -340,7 +343,7 @@ func (r *testAgentMailRepo) RemoveFromDLO(ctx context.Context, id string) error 
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
+	n, _ := res.RowsAffected() //nolint:errcheck // SQLite always supports RowsAffected
 	if n == 0 {
 		return fmt.Errorf("DLO entry %q not found", id)
 	}
@@ -357,7 +360,7 @@ func newTestPostbox(t *testing.T) (*Postbox, *nervous.EventBus) {
 }
 
 func TestPostbox_SendAndDequeueOutbound(t *testing.T) {
-	pb, _ := newTestPostbox(t)
+	pb, _ := newTestPostbox(t) //nolint:dogsled // bus not needed
 	ctx := context.Background()
 
 	mail := &types.AgentMail{
@@ -392,14 +395,17 @@ func TestPostbox_SendAndDequeueOutbound(t *testing.T) {
 	}
 
 	// Queue should be empty now.
-	count, _ = pb.OutboundCount(ctx)
+	count, err = pb.OutboundCount(ctx)
+	if err != nil {
+		t.Fatalf("outbound count after dequeue: %v", err)
+	}
 	if count != 0 {
 		t.Fatalf("expected 0 outbound after dequeue, got %d", count)
 	}
 }
 
 func TestPostbox_ReceiveInbound(t *testing.T) {
-	pb, _ := newTestPostbox(t)
+	pb, _ := newTestPostbox(t) //nolint:dogsled // bus not needed
 	ctx := context.Background()
 
 	mail := &types.AgentMail{
@@ -413,19 +419,25 @@ func TestPostbox_ReceiveInbound(t *testing.T) {
 		t.Fatalf("receive inbound: %v", err)
 	}
 
-	count, _ := pb.InboundCount(ctx)
+	count, err := pb.InboundCount(ctx)
+	if err != nil {
+		t.Fatalf("inbound count: %v", err)
+	}
 	if count != 1 {
 		t.Fatalf("expected 1 inbound, got %d", count)
 	}
 
-	msgs, _ := pb.DequeueInbound(ctx, 10)
+	msgs, err := pb.DequeueInbound(ctx, 10)
+	if err != nil {
+		t.Fatalf("dequeue inbound: %v", err)
+	}
 	if len(msgs) != 1 || msgs[0].ID != "m2" {
 		t.Fatal("unexpected inbound message")
 	}
 }
 
 func TestPostbox_PriorityOrdering(t *testing.T) {
-	pb, _ := newTestPostbox(t)
+	pb, _ := newTestPostbox(t) //nolint:dogsled // bus not needed
 	ctx := context.Background()
 
 	// Send in reverse priority order.
@@ -442,7 +454,10 @@ func TestPostbox_PriorityOrdering(t *testing.T) {
 		}
 	}
 
-	msgs, _ := pb.DequeueOutbound(ctx, 10)
+	msgs, err := pb.DequeueOutbound(ctx, 10)
+	if err != nil {
+		t.Fatalf("dequeue outbound: %v", err)
+	}
 	if len(msgs) != 3 {
 		t.Fatalf("expected 3 messages, got %d", len(msgs))
 	}
@@ -458,11 +473,13 @@ func TestPostbox_PriorityOrdering(t *testing.T) {
 }
 
 func TestPostbox_Acknowledge(t *testing.T) {
-	pb, _ := newTestPostbox(t)
+	pb, _ := newTestPostbox(t) //nolint:dogsled // bus not needed
 	ctx := context.Background()
 
 	mail := &types.AgentMail{ID: "m3", From: "a", To: "b"}
-	_ = pb.SendOutbound(ctx, mail)
+	if err := pb.SendOutbound(ctx, mail); err != nil {
+		t.Fatalf("send outbound: %v", err)
+	}
 
 	ack := &types.MailAck{
 		MailID:     "m3",
@@ -475,7 +492,7 @@ func TestPostbox_Acknowledge(t *testing.T) {
 }
 
 func TestPostbox_Quarantine(t *testing.T) {
-	pb, _ := newTestPostbox(t)
+	pb, _ := newTestPostbox(t) //nolint:dogsled // bus not needed
 	ctx := context.Background()
 
 	mail := &types.AgentMail{ID: "m4", From: "a", To: "b"}
@@ -506,25 +523,36 @@ func TestPostbox_Quarantine(t *testing.T) {
 		t.Fatalf("remove from DLO: %v", err)
 	}
 
-	dlo, _ = pb.ListDLO(ctx, 10)
+	dlo, err = pb.ListDLO(ctx, 10)
+	if err != nil {
+		t.Fatalf("list DLO after removal: %v", err)
+	}
 	if len(dlo) != 0 {
 		t.Fatal("expected empty DLO after removal")
 	}
 }
 
 func TestPostbox_PeekDoesNotRemove(t *testing.T) {
-	pb, _ := newTestPostbox(t)
+	pb, _ := newTestPostbox(t) //nolint:dogsled // bus not needed
 	ctx := context.Background()
 
-	_ = pb.SendOutbound(ctx, &types.AgentMail{ID: "m5", From: "a", To: "b"})
+	if err := pb.SendOutbound(ctx, &types.AgentMail{ID: "m5", From: "a", To: "b"}); err != nil {
+		t.Fatalf("send outbound: %v", err)
+	}
 
-	msgs, _ := pb.PeekOutbound(ctx, 10)
+	msgs, err := pb.PeekOutbound(ctx, 10)
+	if err != nil {
+		t.Fatalf("peek outbound: %v", err)
+	}
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 peeked message, got %d", len(msgs))
 	}
 
 	// Should still be there.
-	count, _ := pb.OutboundCount(ctx)
+	count, err := pb.OutboundCount(ctx)
+	if err != nil {
+		t.Fatalf("outbound count: %v", err)
+	}
 	if count != 1 {
 		t.Fatalf("expected 1 outbound after peek, got %d", count)
 	}

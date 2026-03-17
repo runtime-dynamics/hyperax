@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log/slog"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/internal/repo"
@@ -78,8 +76,12 @@ func (r *SpecRepo) GetSpec(ctx context.Context, id string) (*repo.Spec, error) {
 	s.Description = description.String
 	s.ProjectID = projectID.String
 	s.CreatedBy = createdBy.String
-	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	s.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if s.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.SpecRepo.GetSpec"); err != nil {
+		return nil, err
+	}
+	if s.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.SpecRepo.GetSpec"); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -108,8 +110,12 @@ func (r *SpecRepo) GetSpecByNumber(ctx context.Context, workspaceName string, sp
 	s.Description = description.String
 	s.ProjectID = projectID.String
 	s.CreatedBy = createdBy.String
-	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	s.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if s.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.SpecRepo.GetSpecByNumber"); err != nil {
+		return nil, err
+	}
+	if s.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.SpecRepo.GetSpecByNumber"); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -139,8 +145,12 @@ func (r *SpecRepo) ListSpecs(ctx context.Context, workspaceName string) ([]*repo
 		s.Description = description.String
 		s.ProjectID = projectID.String
 		s.CreatedBy = createdBy.String
-		s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		s.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		if s.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.SpecRepo.ListSpecs"); err != nil {
+			return nil, err
+		}
+		if s.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.SpecRepo.ListSpecs"); err != nil {
+			return nil, err
+		}
 		specs = append(specs, s)
 	}
 	if err := rows.Err(); err != nil {
@@ -209,7 +219,9 @@ func (r *SpecRepo) ListSpecMilestones(ctx context.Context, specID string) ([]*re
 		}
 		ms.Description = description.String
 		ms.MilestoneID = milestoneID.String
-		ms.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		if ms.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.SpecRepo.ListSpecMilestones"); err != nil {
+			return nil, err
+		}
 		milestones = append(milestones, ms)
 	}
 	if err := rows.Err(); err != nil {
@@ -261,7 +273,9 @@ func (r *SpecRepo) ListSpecTasks(ctx context.Context, specMilestoneID string) ([
 		t.Requirement = requirement.String
 		t.AcceptanceCriteria = acceptance.String
 		t.TaskID = taskID.String
-		t.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		if t.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.SpecRepo.ListSpecTasks"); err != nil {
+			return nil, err
+		}
 		tasks = append(tasks, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -299,7 +313,9 @@ func (r *SpecRepo) ListAllSpecTasks(ctx context.Context, specID string) ([]*repo
 		t.Requirement = requirement.String
 		t.AcceptanceCriteria = acceptance.String
 		t.TaskID = taskID.String
-		t.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		if t.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.SpecRepo.ListAllSpecTasks"); err != nil {
+			return nil, err
+		}
 		tasks = append(tasks, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -328,7 +344,7 @@ func (r *SpecRepo) CreateAmendment(ctx context.Context, amendment *repo.SpecAmen
 		`UPDATE specs SET updated_at = datetime('now') WHERE id = ?`,
 		amendment.SpecID,
 	); err != nil {
-		slog.Error("failed to update spec updated_at after amendment", "spec_id", amendment.SpecID, "error", err)
+		return "", fmt.Errorf("sqlite.SpecRepo.CreateAmendment: update spec timestamp: %w", err)
 	}
 
 	return amendment.ID, nil
@@ -355,7 +371,9 @@ func (r *SpecRepo) ListAmendments(ctx context.Context, specID string) ([]*repo.S
 			return nil, fmt.Errorf("sqlite.SpecRepo.ListAmendments: %w", err)
 		}
 		a.Author = author.String
-		a.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
+		if a.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.SpecRepo.ListAmendments"); err != nil {
+			return nil, err
+		}
 		amendments = append(amendments, a)
 	}
 	if err := rows.Err(); err != nil {

@@ -185,8 +185,14 @@ func TestProjectRepo_CreateAndGetTask(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &ProjectRepo{db: db.db}
 
-	planID, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
-	msID, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
+	planID, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	if err != nil {
+		t.Fatalf("create plan: %v", err)
+	}
+	msID, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
+	if err != nil {
+		t.Fatalf("create milestone: %v", err)
+	}
 
 	task := &repo.Task{
 		MilestoneID: msID,
@@ -225,9 +231,18 @@ func TestProjectRepo_UpdateTaskStatus(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &ProjectRepo{db: db.db}
 
-	planID, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
-	msID, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
-	taskID, _ := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Task"})
+	planID, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	if err != nil {
+		t.Fatalf("create plan: %v", err)
+	}
+	msID, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
+	if err != nil {
+		t.Fatalf("create milestone: %v", err)
+	}
+	taskID, err := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Task"})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
 
 	if err := r.UpdateTaskStatus(ctx, taskID, "in-progress"); err != nil {
 		t.Fatalf("update: %v", err)
@@ -256,11 +271,21 @@ func TestProjectRepo_ListTasks(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &ProjectRepo{db: db.db}
 
-	planID, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
-	msID, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
+	planID, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	if err != nil {
+		t.Fatalf("create plan: %v", err)
+	}
+	msID, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
+	if err != nil {
+		t.Fatalf("create milestone: %v", err)
+	}
 
-	_, _ = r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Task B", OrderIndex: 1})
-	_, _ = r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Task A", OrderIndex: 0})
+	if _, err := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Task B", OrderIndex: 1}); err != nil {
+		t.Fatalf("create task B: %v", err)
+	}
+	if _, err := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Task A", OrderIndex: 0}); err != nil {
+		t.Fatalf("create task A: %v", err)
+	}
 
 	tasks, err := r.ListTasks(ctx, msID)
 	if err != nil {
@@ -284,12 +309,28 @@ func TestProjectRepo_ListTasksByWorkspace(t *testing.T) {
 	r := &ProjectRepo{db: db.db}
 
 	// Create two projects in different workspaces.
-	planA, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan A", WorkspaceName: "ws-1"})
-	planB, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan B", WorkspaceName: "ws-2"})
-	msA, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planA, Name: "MS A"})
-	msB, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planB, Name: "MS B"})
-	_, _ = r.CreateTask(ctx, &repo.Task{MilestoneID: msA, Name: "Task in WS1"})
-	_, _ = r.CreateTask(ctx, &repo.Task{MilestoneID: msB, Name: "Task in WS2"})
+	planA, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan A", WorkspaceName: "ws-1"})
+	if err != nil {
+		t.Fatalf("create plan A: %v", err)
+	}
+	planB, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan B", WorkspaceName: "ws-2"})
+	if err != nil {
+		t.Fatalf("create plan B: %v", err)
+	}
+	msA, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planA, Name: "MS A"})
+	if err != nil {
+		t.Fatalf("create milestone A: %v", err)
+	}
+	msB, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planB, Name: "MS B"})
+	if err != nil {
+		t.Fatalf("create milestone B: %v", err)
+	}
+	if _, err := r.CreateTask(ctx, &repo.Task{MilestoneID: msA, Name: "Task in WS1"}); err != nil {
+		t.Fatalf("create task WS1: %v", err)
+	}
+	if _, err := r.CreateTask(ctx, &repo.Task{MilestoneID: msB, Name: "Task in WS2"}); err != nil {
+		t.Fatalf("create task WS2: %v", err)
+	}
 
 	tasks, err := r.ListTasksByWorkspace(ctx, "ws-1", "")
 	if err != nil {
@@ -307,10 +348,21 @@ func TestProjectRepo_ListTasksByWorkspaceWithStatusFilter(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &ProjectRepo{db: db.db}
 
-	planID, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
-	msID, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
-	taskID, _ := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Done Task"})
-	_, _ = r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Pending Task"})
+	planID, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	if err != nil {
+		t.Fatalf("create plan: %v", err)
+	}
+	msID, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
+	if err != nil {
+		t.Fatalf("create milestone: %v", err)
+	}
+	taskID, err := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Done Task"})
+	if err != nil {
+		t.Fatalf("create done task: %v", err)
+	}
+	if _, err := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Pending Task"}); err != nil {
+		t.Fatalf("create pending task: %v", err)
+	}
 
 	// Mark one task completed.
 	_ = r.UpdateTaskStatus(ctx, taskID, "completed")
@@ -331,9 +383,18 @@ func TestProjectRepo_AssignTask(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &ProjectRepo{db: db.db}
 
-	planID, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
-	msID, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
-	taskID, _ := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Task"})
+	planID, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	if err != nil {
+		t.Fatalf("create plan: %v", err)
+	}
+	msID, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "MS"})
+	if err != nil {
+		t.Fatalf("create milestone: %v", err)
+	}
+	taskID, err := r.CreateTask(ctx, &repo.Task{MilestoneID: msID, Name: "Task"})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
 
 	if err := r.AssignTask(ctx, taskID, "persona-42"); err != nil {
 		t.Fatalf("assign: %v", err)
@@ -354,7 +415,10 @@ func TestProjectRepo_AddAndListComments(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &ProjectRepo{db: db.db}
 
-	planID, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	planID, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	if err != nil {
+		t.Fatalf("create plan: %v", err)
+	}
 
 	c1 := &repo.Comment{
 		EntityType: "project",
@@ -417,10 +481,16 @@ func TestProjectRepo_MilestoneDueDate(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &ProjectRepo{db: db.db}
 
-	planID, _ := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	planID, err := r.CreateProjectPlan(ctx, &repo.ProjectPlan{Name: "Plan", WorkspaceName: "ws"})
+	if err != nil {
+		t.Fatalf("create plan: %v", err)
+	}
 
 	// Milestone with no due date.
-	msID1, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "No Due"})
+	msID1, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "No Due"})
+	if err != nil {
+		t.Fatalf("create milestone 1: %v", err)
+	}
 	got1, err := r.GetMilestone(ctx, msID1)
 	if err != nil {
 		t.Fatalf("get ms1: %v", err)
@@ -431,7 +501,10 @@ func TestProjectRepo_MilestoneDueDate(t *testing.T) {
 
 	// Milestone with a due date.
 	dueDate := parseTestDate(t, "2026-06-15 00:00:00")
-	msID2, _ := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "Has Due", DueDate: &dueDate})
+	msID2, err := r.CreateMilestone(ctx, &repo.Milestone{ProjectID: planID, Name: "Has Due", DueDate: &dueDate})
+	if err != nil {
+		t.Fatalf("create milestone 2: %v", err)
+	}
 	got2, err := r.GetMilestone(ctx, msID2)
 	if err != nil {
 		t.Fatalf("get ms2: %v", err)

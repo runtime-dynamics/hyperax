@@ -92,8 +92,8 @@ func (e *ONNXEmbedder) Embed(ctx context.Context, text string) ([]float32, error
 	}
 
 	// Run inference.
-	embedding, err := e.runInference(ctx, text)
-	if err != nil {
+	embedding, err := e.runInference(ctx, text) //nolint:staticcheck // SA4023: stub always errors; real impl behind build tag
+	if err != nil {                              //nolint:staticcheck // SA4023: see above
 		return nil, fmt.Errorf("search.ONNXEmbedder.Embed: %w", err)
 	}
 
@@ -153,7 +153,7 @@ func (e *ONNXEmbedder) initSession() {
 
 // runInference executes the model on the input text and returns the embedding.
 // This is the hot path — called on every Embed() after initialisation.
-func (e *ONNXEmbedder) runInference(_ context.Context, _ string) ([]float32, error) {
+func (e *ONNXEmbedder) runInference(_ context.Context, _ string) ([]float32, error) { //nolint:staticcheck // SA4023: stub; real impl behind build tag
 	// Stub implementation: ONNX Runtime native bindings are not compiled in.
 	// When the yalue/onnxruntime_go package is available (behind build tag),
 	// this function will be replaced with actual inference logic that:

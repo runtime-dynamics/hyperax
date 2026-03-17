@@ -38,7 +38,10 @@ func setupConfigTest(t *testing.T) (*ConfigStore, context.Context) {
 
 func TestLoadBootstrap_Defaults(t *testing.T) {
 	// Save and restore PWD to avoid finding a hyperax.yaml in current dir
-	origDir, _ := os.Getwd()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
 	tmpDir := t.TempDir()
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("chdir: %v", err)
@@ -75,7 +78,10 @@ storage:
 		t.Fatalf("write yaml: %v", err)
 	}
 
-	origDir, _ := os.Getwd()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
 	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("chdir: %v", err)
 	}
@@ -173,7 +179,10 @@ func TestConfigStore_Resolve_ScopeChain(t *testing.T) {
 	if err := cs.repo.SetValue(ctx, "log.level", "warn", types.ConfigScope{Type: "global", ID: ""}, "test"); err != nil {
 		t.Fatalf("set global: %v", err)
 	}
-	val, _ = cs.Resolve(ctx, "log.level", "", "")
+	val, err = cs.Resolve(ctx, "log.level", "", "")
+	if err != nil {
+		t.Fatalf("resolve global: %v", err)
+	}
 	if val != "warn" {
 		t.Errorf("global = %q, want warn", val)
 	}
@@ -182,7 +191,10 @@ func TestConfigStore_Resolve_ScopeChain(t *testing.T) {
 	if err := cs.repo.SetValue(ctx, "log.level", "debug", types.ConfigScope{Type: "workspace", ID: "ws-1"}, "test"); err != nil {
 		t.Fatalf("set workspace: %v", err)
 	}
-	val, _ = cs.Resolve(ctx, "log.level", "", "ws-1")
+	val, err = cs.Resolve(ctx, "log.level", "", "ws-1")
+	if err != nil {
+		t.Fatalf("resolve workspace: %v", err)
+	}
 	if val != "debug" {
 		t.Errorf("workspace = %q, want debug", val)
 	}
@@ -191,7 +203,10 @@ func TestConfigStore_Resolve_ScopeChain(t *testing.T) {
 	if err := cs.repo.SetValue(ctx, "log.level", "error", types.ConfigScope{Type: "agent", ID: "agent-1"}, "test"); err != nil {
 		t.Fatalf("set agent: %v", err)
 	}
-	val, _ = cs.Resolve(ctx, "log.level", "agent-1", "ws-1")
+	val, err = cs.Resolve(ctx, "log.level", "agent-1", "ws-1")
+	if err != nil {
+		t.Fatalf("resolve agent: %v", err)
+	}
 	if val != "error" {
 		t.Errorf("agent = %q, want error", val)
 	}
@@ -238,12 +253,18 @@ func TestConfigStore_IsCritical(t *testing.T) {
 		t.Fatalf("upsert dangerous: %v", err)
 	}
 
-	crit, _ := cs.IsCritical(ctx, "safe")
+	crit, err := cs.IsCritical(ctx, "safe")
+	if err != nil {
+		t.Fatalf("IsCritical safe: %v", err)
+	}
 	if crit {
 		t.Error("safe should not be critical")
 	}
 
-	crit, _ = cs.IsCritical(ctx, "dangerous")
+	crit, err = cs.IsCritical(ctx, "dangerous")
+	if err != nil {
+		t.Fatalf("IsCritical dangerous: %v", err)
+	}
 	if !crit {
 		t.Error("dangerous should be critical")
 	}

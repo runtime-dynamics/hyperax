@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/hyperax/hyperax/pkg/types"
@@ -157,7 +156,7 @@ func (r *TokenRepo) GetByID(ctx context.Context, tokenID string) (*types.MCPToke
 	}
 
 	if err := json.Unmarshal([]byte(scopesRaw), &t.Scopes); err != nil {
-		slog.Error("failed to unmarshal token scopes from database", "error", err)
+		return nil, fmt.Errorf("postgres.TokenRepo: unmarshal scopes: %w", err)
 	}
 	if expiresAt.Valid {
 		t.ExpiresAt = &expiresAt.Time
@@ -185,7 +184,7 @@ func scanPgToken(rows *sql.Rows) (*types.MCPToken, error) {
 	}
 
 	if err := json.Unmarshal([]byte(scopesRaw), &t.Scopes); err != nil {
-		slog.Error("failed to unmarshal token scopes from database", "error", err)
+		return nil, fmt.Errorf("postgres.TokenRepo: unmarshal scopes: %w", err)
 	}
 	if expiresAt.Valid {
 		t.ExpiresAt = &expiresAt.Time

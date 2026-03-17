@@ -138,9 +138,17 @@ func (h *SecretHandler) getSecret(ctx context.Context, params json.RawMessage) (
 
 	var accessScope string
 	if p := h.activeProvider(); p != nil {
-		accessScope, _ = p.GetAccessScope(ctx, args.Key, args.Scope)
+		var scopeErr error
+		accessScope, scopeErr = p.GetAccessScope(ctx, args.Key, args.Scope)
+		if scopeErr != nil {
+			return types.NewErrorResult(fmt.Sprintf("get access scope: %v", scopeErr)), nil
+		}
 	} else if h.store.Secrets != nil {
-		accessScope, _ = h.store.Secrets.GetAccessScope(ctx, args.Key, args.Scope)
+		var scopeErr error
+		accessScope, scopeErr = h.store.Secrets.GetAccessScope(ctx, args.Key, args.Scope)
+		if scopeErr != nil {
+			return types.NewErrorResult(fmt.Sprintf("get access scope: %v", scopeErr)), nil
+		}
 	}
 	if err := checkSecretAccess(ctx, accessScope); err != nil {
 		return types.NewErrorResult(fmt.Sprintf("access denied: %v", err)), nil

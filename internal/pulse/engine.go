@@ -254,7 +254,11 @@ func (e *Engine) publishFire(name, id string, priority types.PulsePriority, payl
 	if payload != nil {
 		data["payload"] = payload
 	}
-	raw, _ := json.Marshal(data)
+	raw, err := json.Marshal(data)
+	if err != nil {
+		e.logger.Error("publishFire: failed to marshal payload", "cadence_id", id, "error", err)
+		return
+	}
 	e.bus.Publish(types.NervousEvent{
 		Type:      types.EventPulseFire,
 		Scope:     "system",
@@ -266,11 +270,15 @@ func (e *Engine) publishFire(name, id string, priority types.PulsePriority, payl
 
 // publishSkipped publishes a pulse.skipped event on the bus.
 func (e *Engine) publishSkipped(name, id, reason string) {
-	raw, _ := json.Marshal(map[string]string{
+	raw, err := json.Marshal(map[string]string{
 		"cadence_id":   id,
 		"cadence_name": name,
 		"reason":       reason,
 	})
+	if err != nil {
+		e.logger.Error("publishSkipped: failed to marshal payload", "cadence_id", id, "error", err)
+		return
+	}
 	e.bus.Publish(types.NervousEvent{
 		Type:      types.EventPulseSkipped,
 		Scope:     "system",
@@ -282,11 +290,15 @@ func (e *Engine) publishSkipped(name, id, reason string) {
 
 // publishBackpressure publishes a pulse.backpressure event on the bus.
 func (e *Engine) publishBackpressure(name, id string) {
-	raw, _ := json.Marshal(map[string]string{
+	raw, err := json.Marshal(map[string]string{
 		"cadence_id":   id,
 		"cadence_name": name,
 		"reason":       "background cadence deferred due to backpressure",
 	})
+	if err != nil {
+		e.logger.Error("publishBackpressure: failed to marshal payload", "cadence_id", id, "error", err)
+		return
+	}
 	e.bus.Publish(types.NervousEvent{
 		Type:      types.EventPulseBackpressure,
 		Scope:     "system",
@@ -298,11 +310,15 @@ func (e *Engine) publishBackpressure(name, id string) {
 
 // publishError publishes a pulse.error event on the bus.
 func (e *Engine) publishError(name, id, message string) {
-	raw, _ := json.Marshal(map[string]string{
+	raw, err := json.Marshal(map[string]string{
 		"cadence_id":   id,
 		"cadence_name": name,
 		"error":        message,
 	})
+	if err != nil {
+		e.logger.Error("publishError: failed to marshal payload", "cadence_id", id, "error", err)
+		return
+	}
 	e.bus.Publish(types.NervousEvent{
 		Type:      types.EventPulseError,
 		Scope:     "system",

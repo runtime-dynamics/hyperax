@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hyperax/hyperax/internal/repo"
@@ -93,8 +92,12 @@ func (r *PersonaRepo) Get(ctx context.Context, id string) (*repo.Persona, error)
 	p.IsActive = isActive == 1
 	p.GuardBypass = guardBypass == 1
 	p.IsInternal = isInternal == 1
-	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if p.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.PersonaRepo.Get"); err != nil {
+		return nil, err
+	}
+	if p.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.PersonaRepo.Get"); err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }
@@ -129,8 +132,12 @@ func (r *PersonaRepo) GetByName(ctx context.Context, name string) (*repo.Persona
 	p.IsActive = isActive == 1
 	p.GuardBypass = guardBypass == 1
 	p.IsInternal = isInternal == 1
-	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-	p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+	if p.CreatedAt, err = parseSQLiteTime(createdAt, "sqlite.PersonaRepo.GetByName"); err != nil {
+		return nil, err
+	}
+	if p.UpdatedAt, err = parseSQLiteTime(updatedAt, "sqlite.PersonaRepo.GetByName"); err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }
@@ -168,8 +175,13 @@ func (r *PersonaRepo) List(ctx context.Context) ([]*repo.Persona, error) {
 		p.IsActive = isActive == 1
 		p.GuardBypass = guardBypass == 1
 		p.IsInternal = isInternal == 1
-		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", createdAt)
-		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", updatedAt)
+		var parseErr error
+		if p.CreatedAt, parseErr = parseSQLiteTime(createdAt, "sqlite.PersonaRepo.List"); parseErr != nil {
+			return nil, parseErr
+		}
+		if p.UpdatedAt, parseErr = parseSQLiteTime(updatedAt, "sqlite.PersonaRepo.List"); parseErr != nil {
+			return nil, parseErr
+		}
 		personas = append(personas, p)
 	}
 

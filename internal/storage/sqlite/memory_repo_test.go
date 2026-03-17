@@ -75,15 +75,18 @@ func TestMemoryRepo_Delete(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &MemoryRepo{db: db.db}
 
-	id, _ := r.Store(ctx, &types.Memory{
+	id, err := r.Store(ctx, &types.Memory{
 		Scope: types.MemoryScopeProject, Type: types.MemoryTypeEpisodic, Content: "to be deleted",
 	})
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
 
 	if err := r.Delete(ctx, id); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 
-	_, err := r.Get(ctx, id)
+	_, err = r.Get(ctx, id)
 	if err == nil {
 		t.Fatal("expected error after delete")
 	}
@@ -156,10 +159,13 @@ func TestMemoryRepo_RecallExcludesConsolidated(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &MemoryRepo{db: db.db}
 
-	id, _ := r.Store(ctx, &types.Memory{
+	id, err := r.Store(ctx, &types.Memory{
 		Scope: types.MemoryScopeProject, Type: types.MemoryTypeEpisodic,
 		Content: "old episodic fact", WorkspaceID: "ws-1",
 	})
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
 
 	// Mark as consolidated.
 	_ = r.MarkConsolidated(ctx, []string{id}, "target-id")
@@ -177,10 +183,13 @@ func TestMemoryRepo_RecallExcludesContested(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &MemoryRepo{db: db.db}
 
-	id, _ := r.Store(ctx, &types.Memory{
+	id, err := r.Store(ctx, &types.Memory{
 		Scope: types.MemoryScopeProject, Type: types.MemoryTypeSemantic,
 		Content: "contested fact", WorkspaceID: "ws-1",
 	})
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
 
 	_ = r.MarkContested(ctx, id, "other-memory-id")
 
@@ -197,10 +206,13 @@ func TestMemoryRepo_TouchAccess(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &MemoryRepo{db: db.db}
 
-	id, _ := r.Store(ctx, &types.Memory{
+	id, err := r.Store(ctx, &types.Memory{
 		Scope: types.MemoryScopeGlobal, Type: types.MemoryTypeProcedural,
 		Content: "important procedure",
 	})
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
 
 	// Touch access twice.
 	_ = r.TouchAccess(ctx, id)
@@ -256,9 +268,12 @@ func TestMemoryRepo_Annotations(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &MemoryRepo{db: db.db}
 
-	memID, _ := r.Store(ctx, &types.Memory{
+	memID, err := r.Store(ctx, &types.Memory{
 		Scope: types.MemoryScopeGlobal, Type: types.MemoryTypeSemantic, Content: "fact",
 	})
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
 
 	ann := &types.MemoryAnnotation{
 		MemoryID:       memID,
@@ -295,10 +310,13 @@ func TestMemoryRepo_ListConsolidationCandidates(t *testing.T) {
 	r := &MemoryRepo{db: db.db}
 
 	// Store a memory and manually set old accessed_at.
-	id, _ := r.Store(ctx, &types.Memory{
+	id, err := r.Store(ctx, &types.Memory{
 		Scope: types.MemoryScopeProject, Type: types.MemoryTypeEpisodic,
 		Content: "old fact", WorkspaceID: "ws-1",
 	})
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
 
 	// Force the accessed_at to be old.
 	_, _ = r.db.ExecContext(ctx,
@@ -317,15 +335,24 @@ func TestMemoryRepo_MarkConsolidated(t *testing.T) {
 	db, ctx := setupTestDB(t)
 	r := &MemoryRepo{db: db.db}
 
-	id1, _ := r.Store(ctx, &types.Memory{Scope: types.MemoryScopeGlobal, Type: types.MemoryTypeEpisodic, Content: "a"})
-	id2, _ := r.Store(ctx, &types.Memory{Scope: types.MemoryScopeGlobal, Type: types.MemoryTypeEpisodic, Content: "b"})
+	id1, err := r.Store(ctx, &types.Memory{Scope: types.MemoryScopeGlobal, Type: types.MemoryTypeEpisodic, Content: "a"})
+	if err != nil {
+		t.Fatalf("store 1: %v", err)
+	}
+	id2, err := r.Store(ctx, &types.Memory{Scope: types.MemoryScopeGlobal, Type: types.MemoryTypeEpisodic, Content: "b"})
+	if err != nil {
+		t.Fatalf("store 2: %v", err)
+	}
 
-	err := r.MarkConsolidated(ctx, []string{id1, id2}, "target-id")
+	err = r.MarkConsolidated(ctx, []string{id1, id2}, "target-id")
 	if err != nil {
 		t.Fatalf("mark consolidated: %v", err)
 	}
 
-	got1, _ := r.Get(ctx, id1)
+	got1, err := r.Get(ctx, id1)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
 	if got1.ConsolidatedInto != "target-id" {
 		t.Errorf("consolidated_into = %q, want %q", got1.ConsolidatedInto, "target-id")
 	}
