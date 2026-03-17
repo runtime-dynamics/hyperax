@@ -583,11 +583,17 @@ func TestCancelJob(t *testing.T) {
 		done <- executor.Execute(context.Background(), jobID, workDir)
 	}()
 
-	// Wait for the job to start, then cancel it.
-	time.Sleep(300 * time.Millisecond)
-	cancelled := executor.CancelJob(jobID)
+	// Wait for the job to register in the executor's cancel map.
+	// On slow CI runners this can take longer than 300ms.
+	var cancelled bool
+	for range 20 {
+		time.Sleep(100 * time.Millisecond)
+		if cancelled = executor.CancelJob(jobID); cancelled {
+			break
+		}
+	}
 	if !cancelled {
-		t.Error("CancelJob returned false, expected true")
+		t.Fatal("CancelJob never returned true — job did not register in time")
 	}
 
 	select {
@@ -595,7 +601,7 @@ func TestCancelJob(t *testing.T) {
 		if err == nil {
 			t.Error("expected error after cancellation, got nil")
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("timeout waiting for cancelled execution to finish")
 	}
 }

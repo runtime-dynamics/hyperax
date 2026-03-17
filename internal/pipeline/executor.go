@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -192,6 +193,12 @@ func (e *Executor) executeStep(ctx context.Context, jobID, swimlaneID string, st
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", st.Command)
 	cmd.Dir = workDir
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		// Kill the entire process group so child processes (e.g., sleep)
+		// are cleaned up when the context is cancelled.
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
 	if len(env) > 0 {
 		cmd.Env = env
 	}
