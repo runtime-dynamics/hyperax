@@ -26,9 +26,9 @@ type TelemetryRepo interface {
 	// EndSession marks a session as completed by setting ended_at and status.
 	EndSession(ctx context.Context, id string) error
 
-	// UpdateSessionStats updates the running tool call count and total cost
-	// for an active session.
-	UpdateSessionStats(ctx context.Context, id string, toolCalls int, totalCost float64) error
+	// UpdateSessionStats updates the running tool call count, total cost,
+	// and accumulated token counts for an active session.
+	UpdateSessionStats(ctx context.Context, id string, toolCalls int, totalCost float64, promptTokens, completionTokens, totalTokens int) error
 
 	// Tool call metrics
 

@@ -165,7 +165,8 @@ func (t *SessionTracker) RecordToolCall(ctx context.Context, sessionID string, m
 		session.ToolCalls++
 		session.TotalCost += metric.Cost
 		// Persist to DB periodically — we do it on every call for correctness.
-		if err := t.repo.UpdateSessionStats(ctx, sessionID, session.ToolCalls, session.TotalCost); err != nil {
+		if err := t.repo.UpdateSessionStats(ctx, sessionID, session.ToolCalls, session.TotalCost,
+			session.PromptTokens, session.CompletionTokens, session.TotalTokens); err != nil {
 			t.logger.Error("failed to persist session telemetry", "session", sessionID, "error", err)
 		}
 	}
@@ -191,6 +192,40 @@ func (t *SessionTracker) RecordToolCall(ctx context.Context, sessionID string, m
 			})
 		}
 	}
+
+	return nil
+}
+
+// RecordTokenUsage accumulates prompt, completion, and total token counts for
+// an active session. The counts are added to the session's running totals and
+// persisted to the database. This should be called after each LLM completion
+// when usage information is available.
+func (t *SessionTracker) RecordTokenUsage(ctx context.Context, sessionID string, promptTokens, completionTokens, totalTokens int) error {
+	t.mu.Lock()
+	session, exists := t.active[sessionID]
+	if !exists {
+		t.mu.Unlock()
+		return fmt.Errorf("session %q not found in active sessions", sessionID)
+	}
+
+	session.PromptTokens += promptTokens
+	session.CompletionTokens += completionTokens
+	session.TotalTokens += totalTokens
+
+	// Persist the updated stats to the database.
+	if err := t.repo.UpdateSessionStats(ctx, sessionID, session.ToolCalls, session.TotalCost,
+		session.PromptTokens, session.CompletionTokens, session.TotalTokens); err != nil {
+		t.mu.Unlock()
+		return fmt.Errorf("telemetry.SessionTracker.RecordTokenUsage: %w", err)
+	}
+	t.mu.Unlock()
+
+	t.logger.Debug("token usage recorded",
+		"session_id", sessionID,
+		"prompt_tokens", promptTokens,
+		"completion_tokens", completionTokens,
+		"total_tokens", totalTokens,
+	)
 
 	return nil
 }

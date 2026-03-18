@@ -30,10 +30,13 @@ func (r *TelemetryRepo) CreateSession(ctx context.Context, session *types.Sessio
 	}
 
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, agent_id, provider_id, model, started_at, tool_calls, total_cost, status, metadata)
-		 VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)`,
+		`INSERT INTO sessions (id, agent_id, provider_id, model, started_at, tool_calls, total_cost,
+		                       prompt_tokens, completion_tokens, total_tokens, status, metadata)
+		 VALUES (?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?)`,
 		session.ID, session.AgentID, session.ProviderID, session.Model,
-		session.ToolCalls, session.TotalCost, session.Status, session.Metadata,
+		session.ToolCalls, session.TotalCost,
+		session.PromptTokens, session.CompletionTokens, session.TotalTokens,
+		session.Status, session.Metadata,
 	)
 	if err != nil {
 		return "", fmt.Errorf("sqlite.TelemetryRepo.CreateSession: %w", err)
@@ -52,11 +55,14 @@ func (r *TelemetryRepo) GetSession(ctx context.Context, id string) (*types.Sessi
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, agent_id, COALESCE(provider_id, ''), COALESCE(model, ''),
 		        started_at, ended_at, tool_calls, total_cost,
+		        prompt_tokens, completion_tokens, total_tokens,
 		        status, COALESCE(metadata, '{}'), created_at
 		 FROM sessions WHERE id = ?`, id,
 	).Scan(
 		&s.ID, &s.AgentID, &s.ProviderID, &s.Model, &startedAt, &endedAt,
-		&s.ToolCalls, &s.TotalCost, &s.Status, &s.Metadata, &createdAt,
+		&s.ToolCalls, &s.TotalCost,
+		&s.PromptTokens, &s.CompletionTokens, &s.TotalTokens,
+		&s.Status, &s.Metadata, &createdAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("session %q not found", id)
@@ -88,6 +94,7 @@ func (r *TelemetryRepo) GetSession(ctx context.Context, id string) (*types.Sessi
 func (r *TelemetryRepo) ListSessions(ctx context.Context, agentID string, limit int) ([]*types.Session, error) {
 	query := `SELECT id, agent_id, COALESCE(provider_id, ''), COALESCE(model, ''),
 	                 started_at, ended_at, tool_calls, total_cost,
+	                 prompt_tokens, completion_tokens, total_tokens,
 	                 status, COALESCE(metadata, '{}'), created_at
 	          FROM sessions`
 	var args []interface{}
@@ -119,7 +126,9 @@ func (r *TelemetryRepo) ListSessions(ctx context.Context, agentID string, limit 
 
 		if err := rows.Scan(
 			&s.ID, &s.AgentID, &s.ProviderID, &s.Model, &startedAt, &endedAt,
-			&s.ToolCalls, &s.TotalCost, &s.Status, &s.Metadata, &createdAt,
+			&s.ToolCalls, &s.TotalCost,
+			&s.PromptTokens, &s.CompletionTokens, &s.TotalTokens,
+			&s.Status, &s.Metadata, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("sqlite.TelemetryRepo.ListSessions: %w", err)
 		}
@@ -171,11 +180,14 @@ func (r *TelemetryRepo) EndSession(ctx context.Context, id string) error {
 	return nil
 }
 
-// UpdateSessionStats updates the running tool call count and total cost.
-func (r *TelemetryRepo) UpdateSessionStats(ctx context.Context, id string, toolCalls int, totalCost float64) error {
+// UpdateSessionStats updates the running tool call count, total cost, and
+// accumulated token counts for an active session.
+func (r *TelemetryRepo) UpdateSessionStats(ctx context.Context, id string, toolCalls int, totalCost float64, promptTokens, completionTokens, totalTokens int) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE sessions SET tool_calls = ?, total_cost = ? WHERE id = ?`,
-		toolCalls, totalCost, id,
+		`UPDATE sessions SET tool_calls = ?, total_cost = ?,
+		        prompt_tokens = ?, completion_tokens = ?, total_tokens = ?
+		 WHERE id = ?`,
+		toolCalls, totalCost, promptTokens, completionTokens, totalTokens, id,
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite.TelemetryRepo.UpdateSessionStats: %w", err)

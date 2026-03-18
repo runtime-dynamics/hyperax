@@ -109,6 +109,33 @@ func TestEstimateProviderCost_Bedrock(t *testing.T) {
 	}
 }
 
+func TestEstimateProviderCost_OllamaZeroCost(t *testing.T) {
+	// Local providers must always return zero cost regardless of model or token count.
+	cases := []struct {
+		model     string
+		tokensIn  int64
+		tokensOut int64
+	}{
+		{"llama3.1:70b", 50000, 10000},
+		{"mistral:latest", 100000, 50000},
+		{"codellama:13b", 0, 1000},
+		{"any-model", 1_000_000, 1_000_000},
+	}
+	for _, tc := range cases {
+		cost := EstimateProviderCost("ollama", tc.model, tc.tokensIn, tc.tokensOut)
+		if cost != 0.0 {
+			t.Errorf("EstimateProviderCost(ollama, %q, %d, %d) = %f, want 0.0",
+				tc.model, tc.tokensIn, tc.tokensOut, cost)
+		}
+	}
+
+	// Verify case-insensitive kind matching.
+	cost := EstimateProviderCost("Ollama", "llama3.1:8b", 10000, 5000)
+	if cost != 0.0 {
+		t.Errorf("case-insensitive Ollama cost = %f, want 0.0", cost)
+	}
+}
+
 func TestLookupTokenRate_Known(t *testing.T) {
 	rate := LookupTokenRate("anthropic", "claude-opus-4-20250514")
 	if rate == nil {

@@ -12,9 +12,12 @@ type Session struct {
 	StartedAt  time.Time     `json:"started_at"`
 	EndedAt    *time.Time    `json:"ended_at,omitempty"`
 	Duration   time.Duration `json:"duration"`   // computed from StartedAt/EndedAt
-	ToolCalls  int           `json:"tool_calls"` // running count of tool invocations
-	TotalCost  float64       `json:"total_cost"` // accumulated estimated cost
-	Status     string        `json:"status"`     // "active", "completed", "abandoned"
+	ToolCalls        int           `json:"tool_calls"`        // running count of tool invocations
+	TotalCost        float64       `json:"total_cost"`        // accumulated estimated cost
+	PromptTokens     int           `json:"prompt_tokens"`     // accumulated prompt/input tokens
+	CompletionTokens int           `json:"completion_tokens"` // accumulated completion/output tokens
+	TotalTokens      int           `json:"total_tokens"`      // accumulated total tokens (prompt + completion)
+	Status           string        `json:"status"`            // "active", "completed", "abandoned"
 	Metadata   string        `json:"metadata"`   // free-form JSON
 	CreatedAt  time.Time     `json:"created_at"`
 }

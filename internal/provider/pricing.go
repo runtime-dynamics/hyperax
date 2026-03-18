@@ -77,6 +77,12 @@ func EstimateProviderCost(kind string, model string, tokensIn int64, tokensOut i
 	kindLower := strings.ToLower(kind)
 	modelLower := strings.ToLower(model)
 
+	// Local inference providers have no API billing cost.
+	switch kindLower {
+	case "ollama":
+		return 0.0
+	}
+
 	// Look up pricing entries for this provider kind.
 	entries, ok := providerPricing[kindLower]
 	if ok {

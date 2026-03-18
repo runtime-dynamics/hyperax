@@ -18,6 +18,17 @@ import (
 // before the executor returns an error to prevent runaway loops.
 const DefaultMaxIterations = 100
 
+// DefaultMaxTotalToolCalls is the absolute cap on individual tool call
+// dispatches across all iterations. This prevents runaway loops where
+// each iteration dispatches multiple calls (e.g., 4,644 calls for 10
+// documents). Set to 0 to disable the cap.
+const DefaultMaxTotalToolCalls = 50
+
+// patternRingSize is the number of recent tool names tracked for
+// repeating-pattern detection. A ring of 6 detects 2-tool and 3-tool
+// cycles (e.g., [A,B,A,B,A,B] or [A,B,C,A,B,C]).
+const patternRingSize = 6
+
 // DispatchFunc is the signature for the function that executes a single MCP
 // tool call. It mirrors ToolRegistry.Dispatch.
 type DispatchFunc func(ctx context.Context, name string, params json.RawMessage) (*types.ToolResult, error)
@@ -36,6 +47,18 @@ type ExecutorConfig struct {
 	// MaxIterations is the maximum number of tool-use round-trips before
 	// returning an error. Defaults to DefaultMaxIterations if <= 0.
 	MaxIterations int
+
+	// MaxTotalToolCalls is the absolute cap on individual tool call dispatches
+	// across all iterations. When exceeded, the executor injects a limit-reached
+	// message and returns the last text response. Defaults to
+	// DefaultMaxTotalToolCalls if <= 0. Set to -1 to explicitly disable.
+	MaxTotalToolCalls int
+
+	// MaxContextMessages caps the number of messages in the conversation
+	// history. When exceeded, older messages (between the system prompt and
+	// the most recent turns) are dropped to prevent unbounded context growth.
+	// Default: 40 (system + ~20 tool-use round-trips). 0 = unlimited.
+	MaxContextMessages int
 
 	// AutoContinue, when true, causes the executor to reset the iteration
 	// counter upon hitting MaxIterations instead of stopping. The loop
@@ -80,6 +103,12 @@ type Executor struct {
 func NewExecutor(config ExecutorConfig, adapter ProviderToolAdapter, resolver *Resolver, logger *slog.Logger) *Executor {
 	if config.MaxIterations <= 0 {
 		config.MaxIterations = DefaultMaxIterations
+	}
+	if config.MaxTotalToolCalls == 0 {
+		config.MaxTotalToolCalls = DefaultMaxTotalToolCalls
+	}
+	if config.MaxContextMessages == 0 {
+		config.MaxContextMessages = 20
 	}
 	if logger == nil {
 		logger = slog.Default()
@@ -155,8 +184,11 @@ func (e *Executor) Execute(
 	})
 
 	var totalUsage provider.UsageInfo
-	var lastCallKey string              // For cycle detection: "name:args"
+	var lastCallKey string                        // For single-call cycle detection: "name:args"
 	var lastTextResp *provider.CompletionResponse // Track last response with text content
+	var totalToolCalls int                        // Absolute count of dispatched tool calls
+	var patternRing [patternRingSize]string       // Ring buffer of recent tool names for pattern detection
+	var patternIdx int                            // Current write position in the ring buffer
 
 	for iteration := 1; ; iteration++ {
 		// Check iteration limit (auto-continue resets the window).
@@ -270,6 +302,79 @@ func (e *Executor) Execute(
 			lastCallKey = "" // Reset cycle detection for multi-call turns.
 		}
 
+		// Check absolute tool call cap before dispatching this batch.
+		if e.config.MaxTotalToolCalls > 0 && totalToolCalls+len(calls) > e.config.MaxTotalToolCalls {
+			e.logger.Warn("tool call guardrail: absolute cap reached",
+				"total_tool_calls", totalToolCalls,
+				"pending_calls", len(calls),
+				"limit", e.config.MaxTotalToolCalls,
+			)
+			e.emit(types.EventToolUseGuardrailTriggered, map[string]any{
+				"reason":           "max_total_tool_calls",
+				"total_tool_calls": totalToolCalls,
+				"limit":            e.config.MaxTotalToolCalls,
+				"iteration":        iteration,
+				"agent_name":       e.config.AgentName,
+			})
+
+			// Inject a limit-reached message and return the last text response.
+			if lastTextResp != nil {
+				return &ExecuteResult{
+					Response:   lastTextResp,
+					Iterations: iteration,
+					TotalUsage: totalUsage,
+				}, nil
+			}
+			// No prior text response — synthesize a content message in the current response.
+			resp.Content = fmt.Sprintf(
+				"Tool call limit reached (%d calls). Please complete your response with the information you have.",
+				e.config.MaxTotalToolCalls,
+			)
+			return &ExecuteResult{
+				Response:   resp,
+				Iterations: iteration,
+				TotalUsage: totalUsage,
+			}, nil
+		}
+
+		// Pattern-based cycle detection: track tool names in a ring buffer
+		// and detect repeating sequences (e.g., [A,B,A,B,A,B] or [A,B,C,A,B,C]).
+		for _, call := range calls {
+			patternRing[patternIdx%patternRingSize] = call.Name
+			patternIdx++
+		}
+		if patternIdx >= patternRingSize {
+			if pattern := detectRepeatingPattern(patternRing); pattern != "" {
+				e.logger.Warn("tool call guardrail: repeating pattern detected",
+					"pattern", pattern,
+					"iteration", iteration,
+				)
+				e.emit(types.EventToolUseGuardrailTriggered, map[string]any{
+					"reason":     "repeating_pattern",
+					"pattern":    pattern,
+					"iteration":  iteration,
+					"agent_name": e.config.AgentName,
+				})
+
+				if lastTextResp != nil {
+					return &ExecuteResult{
+						Response:   lastTextResp,
+						Iterations: iteration,
+						TotalUsage: totalUsage,
+					}, nil
+				}
+				resp.Content = fmt.Sprintf(
+					"Repeating tool call pattern detected (%s). Breaking loop — please complete your response with the information you have.",
+					pattern,
+				)
+				return &ExecuteResult{
+					Response:   resp,
+					Iterations: iteration,
+					TotalUsage: totalUsage,
+				}, nil
+			}
+		}
+
 		// Dispatch each tool call.
 		results := make([]types.ToolCallResult, len(calls))
 		for i, call := range calls {
@@ -281,6 +386,7 @@ func (e *Executor) Execute(
 			})
 			result := e.dispatchCall(ctx, call)
 			results[i] = result
+			totalToolCalls++
 		}
 
 		// Format results for the provider and append to messages.
@@ -295,6 +401,32 @@ func (e *Executor) Execute(
 			return nil, fmt.Errorf("tooluse.Executor.Execute: format turn messages (iteration %d): %w", iteration, fmtErr)
 		}
 		req.Messages = append(req.Messages, turnMsgs...)
+
+		// Context window management: trim older messages to prevent unbounded growth.
+		// Keeps the system prompt (first message) and the most recent messages,
+		// dropping the middle. This is a lightweight alternative to LLM-based
+		// summarization — it costs zero tokens and prevents context bloat in
+		// long tool-use loops.
+		if e.config.MaxContextMessages > 0 && len(req.Messages) > e.config.MaxContextMessages {
+			keep := e.config.MaxContextMessages - 1 // reserve 1 slot for system prompt
+			trimmed := len(req.Messages) - keep - 1
+			pruned := make([]provider.ChatMessage, 0, e.config.MaxContextMessages)
+			pruned = append(pruned, req.Messages[0]) // system prompt
+			pruned = append(pruned, req.Messages[len(req.Messages)-keep:]...)
+			req.Messages = pruned
+
+			// Reset the tool call counter — the agent is effectively working
+			// in a new context window, so its budget refreshes.
+			prevCalls := totalToolCalls
+			totalToolCalls = 0
+
+			e.logger.Info("context truncated, tool call budget reset",
+				"trimmed_messages", trimmed,
+				"remaining_messages", len(req.Messages),
+				"tool_calls_before_reset", prevCalls,
+				"iteration", iteration,
+			)
+		}
 	}
 
 	// Max iterations reached (auto_continue=false). Return the last text
@@ -447,6 +579,32 @@ func toolCallNames(calls []types.ToolCall) []string {
 		names[i] = c.Name
 	}
 	return names
+}
+
+// detectRepeatingPattern checks a fixed-size ring buffer for repeating tool
+// name sequences. It tests period lengths 1, 2, and 3 (covering single-tool
+// loops, 2-tool ping-pongs like [A,B,A,B,A,B], and 3-tool cycles like
+// [A,B,C,A,B,C]). Returns a human-readable description of the pattern if
+// found, or "" if no repetition is detected.
+func detectRepeatingPattern(ring [patternRingSize]string) string {
+	n := len(ring)
+	for period := 1; period <= 3; period++ {
+		if n%period != 0 {
+			continue
+		}
+		match := true
+		for i := period; i < n; i++ {
+			if ring[i] != ring[i%period] {
+				match = false
+				break
+			}
+		}
+		if match {
+			// Build a readable pattern string like "A" or "A,B" or "A,B,C".
+			return strings.Join(ring[:period], ",")
+		}
+	}
+	return ""
 }
 
 // emit publishes an event if an emitter is configured.

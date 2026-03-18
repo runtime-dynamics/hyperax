@@ -76,6 +76,16 @@ type ProcessMessageConfig struct {
 	// 0 uses the default (100).
 	MaxIterations int
 
+	// MaxTotalToolCalls is the absolute cap on individual tool call dispatches
+	// across all iterations. Prevents runaway loops where each iteration
+	// dispatches multiple calls. 0 uses the default (50), -1 disables.
+	MaxTotalToolCalls int
+
+	// MaxContextMessages caps conversation history in the tool-use loop.
+	// Older messages are dropped to prevent unbounded context growth.
+	// 0 uses the default (40).
+	MaxContextMessages int
+
 	// AutoContinue, when true, resets the iteration counter at MaxIterations
 	// instead of stopping. The loop runs until the LLM finishes or context expires.
 	AutoContinue bool
@@ -113,14 +123,16 @@ func (b *Bridge) ProcessMessage(ctx context.Context, cfg ProcessMessageConfig) (
 	// Create the executor.
 	exec := NewExecutor(
 		ExecutorConfig{
-			MaxIterations:  cfg.MaxIterations,
-			AutoContinue:   cfg.AutoContinue,
-			PersonaID:      cfg.PersonaID,
-			ClearanceLevel: cfg.ClearanceLevel,
-			AgentName:      cfg.AgentName,
-			Dispatch:       b.dispatch,
-			Emitter:        emitter,
-			Recorder:       cfg.Recorder,
+			MaxIterations:      cfg.MaxIterations,
+			MaxTotalToolCalls:  cfg.MaxTotalToolCalls,
+			MaxContextMessages: cfg.MaxContextMessages,
+			AutoContinue:       cfg.AutoContinue,
+			PersonaID:          cfg.PersonaID,
+			ClearanceLevel:     cfg.ClearanceLevel,
+			AgentName:          cfg.AgentName,
+			Dispatch:           b.dispatch,
+			Emitter:            emitter,
+			Recorder:           cfg.Recorder,
 		},
 		adapter,
 		b.resolver,
@@ -177,14 +189,16 @@ func (b *Bridge) ProcessMessageWithCompleteFn(
 
 	exec := NewExecutor(
 		ExecutorConfig{
-			MaxIterations:  cfg.MaxIterations,
-			AutoContinue:   cfg.AutoContinue,
-			PersonaID:      cfg.PersonaID,
-			ClearanceLevel: cfg.ClearanceLevel,
-			AgentName:      cfg.AgentName,
-			Dispatch:       b.dispatch,
-			Emitter:        emitter,
-			Recorder:       cfg.Recorder,
+			MaxIterations:      cfg.MaxIterations,
+			MaxTotalToolCalls:  cfg.MaxTotalToolCalls,
+			MaxContextMessages: cfg.MaxContextMessages,
+			AutoContinue:       cfg.AutoContinue,
+			PersonaID:          cfg.PersonaID,
+			ClearanceLevel:     cfg.ClearanceLevel,
+			AgentName:          cfg.AgentName,
+			Dispatch:           b.dispatch,
+			Emitter:            emitter,
+			Recorder:           cfg.Recorder,
 		},
 		adapter,
 		b.resolver,

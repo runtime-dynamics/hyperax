@@ -695,7 +695,12 @@ export function DocsPage() {
   const [selectedSpecId, setSelectedSpecId] = useState('')
   const [activeTab, setActiveTab] = useState('docs')
 
-  const filteredWorkspaces = (workspaces ?? []).filter((w) => w.name !== '_org')
+  const sortedWorkspaces = (workspaces ?? []).slice().sort((a, b) => {
+    // _org always first
+    if (a.name === '_org') return -1
+    if (b.name === '_org') return 1
+    return a.name.localeCompare(b.name)
+  })
 
   // Determine if selected workspace is missing required docs
   const wsMissingDocs = status && (!status.has_architecture || !status.has_standards)
@@ -729,9 +734,9 @@ export function DocsPage() {
                 <SelectValue placeholder="Select project..." />
               </SelectTrigger>
               <SelectContent>
-                {filteredWorkspaces.map((w) => (
+                {sortedWorkspaces.map((w) => (
                   <SelectItem key={w.name} value={w.name}>
-                    {w.name}
+                    {w.name === '_org' ? 'Org Workspace' : w.name}
                   </SelectItem>
                 ))}
               </SelectContent>

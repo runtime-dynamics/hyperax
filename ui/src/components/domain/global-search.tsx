@@ -31,8 +31,8 @@ export function GlobalSearch() {
   const navigate = useNavigate()
 
   const { data: workspaces } = useWorkspaces()
-  const filteredWorkspaces = (workspaces ?? []).filter((w) => w.name !== '_org')
-  const allWorkspaceNames = filteredWorkspaces.map((w) => w.name)
+  const allWorkspaces = workspaces ?? []
+  const allWorkspaceNames = allWorkspaces.map((w) => w.name)
   const effectiveWorkspace = filterWorkspace === '__all__' ? '' : filterWorkspace
 
   const {
@@ -157,9 +157,9 @@ export function GlobalSearch() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">All Projects</SelectItem>
-                  {filteredWorkspaces.map((w) => (
+                  {allWorkspaces.map((w) => (
                     <SelectItem key={w.name} value={w.name}>
-                      {w.name}
+                      {w.name === '_org' ? 'Org Workspace' : w.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

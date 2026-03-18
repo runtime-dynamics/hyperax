@@ -29,6 +29,7 @@ var DefaultConfigKeys = []types.ConfigKeyMeta{
 	{Key: "guard.auto_approve_reads", ScopeType: "global", ValueType: "bool", DefaultVal: "true", Description: "Auto-approve read-only tool calls without guard evaluation"},
 	{Key: "guard.allow_bypass", ScopeType: "global", ValueType: "bool", DefaultVal: "false", Description: "Allow personas with guard_bypass=true to skip guard evaluation"},
 	{Key: "tooluse.max_iterations", ScopeType: "global", ValueType: "int", DefaultVal: "100", Description: "Maximum tool-use loop iterations per chat completion"},
+	{Key: "tooluse.max_total_tool_calls", ScopeType: "global", ValueType: "int", DefaultVal: "50", Description: "Absolute cap on total tool call dispatches across all iterations (0 = unlimited, -1 = disabled)"},
 	{Key: "tooluse.auto_continue", ScopeType: "global", ValueType: "bool", DefaultVal: "false", Description: "Automatically continue tool-use loop past max iterations instead of stopping"},
 }
 

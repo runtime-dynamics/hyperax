@@ -579,11 +579,17 @@ func (a *ChatAPI) generateResponse(agentName, userID, latestMessage, sessionID s
 	if a.bridge != nil {
 		// Resolve tool-use settings from config store.
 		maxIter := tooluse.DefaultMaxIterations
+		maxTotalCalls := tooluse.DefaultMaxTotalToolCalls
 		autoContinue := false
 		if a.store != nil && a.store.Config != nil {
 			if v, err := a.store.Config.GetValue(ctx, "tooluse.max_iterations", types.ConfigScope{Type: "global"}); err == nil {
 				if parsed, parseErr := strconv.Atoi(v); parseErr == nil && parsed > 0 {
 					maxIter = parsed
+				}
+			}
+			if v, err := a.store.Config.GetValue(ctx, "tooluse.max_total_tool_calls", types.ConfigScope{Type: "global"}); err == nil {
+				if parsed, parseErr := strconv.Atoi(v); parseErr == nil {
+					maxTotalCalls = parsed
 				}
 			}
 			if v, err := a.store.Config.GetValue(ctx, "tooluse.auto_continue", types.ConfigScope{Type: "global"}); err == nil {
@@ -617,22 +623,23 @@ func (a *ChatAPI) generateResponse(agentName, userID, latestMessage, sessionID s
 
 		// Bridge path: use workModel (default_model) for tool-use execution.
 		cfg := tooluse.ProcessMessageConfig{
-			ProviderKind:     prov.Kind,
-			BaseURL:          prov.BaseURL,
-			APIKey:           apiKey,
-			Model:            workModel,
-			ClearanceLevel:   agent.ClearanceLevel,
-			DelegationScopes: delegScopes,
-			AllowedActions:   allowedActions,
-			PersonaID:        agent.ID,
-			AgentName:        agentName,
-			SystemPrompt:     systemPrompt,
-			UserMessage:      latestMessage,
-			History:          history,
-			MaxIterations:    maxIter,
-			AutoContinue:     autoContinue,
-			Bus:              a.bus,
-			Recorder:         recorder,
+			ProviderKind:      prov.Kind,
+			BaseURL:           prov.BaseURL,
+			APIKey:            apiKey,
+			Model:             workModel,
+			ClearanceLevel:    agent.ClearanceLevel,
+			DelegationScopes:  delegScopes,
+			AllowedActions:    allowedActions,
+			PersonaID:         agent.ID,
+			AgentName:         agentName,
+			SystemPrompt:      systemPrompt,
+			UserMessage:       latestMessage,
+			History:           history,
+			MaxIterations:     maxIter,
+			MaxTotalToolCalls: maxTotalCalls,
+			AutoContinue:      autoContinue,
+			Bus:               a.bus,
+			Recorder:          recorder,
 		}
 		result, bridgeErr := a.bridge.ProcessMessage(ctx, cfg)
 		if bridgeErr != nil {
@@ -700,6 +707,19 @@ func (a *ChatAPI) generateResponse(agentName, userID, latestMessage, sessionID s
 					"tokens_out", usage.CompletionTokens,
 				)
 			}
+		}
+	}
+
+	// 9c. Record token usage against the telemetry session so users can see
+	// how much context each session consumes.
+	if usage != nil && a.sessionTracker != nil && telemetrySessionID != "" {
+		if tokenErr := a.sessionTracker.RecordTokenUsage(ctx, telemetrySessionID,
+			usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens); tokenErr != nil {
+			a.logger.Warn("chat completion: failed to record token usage",
+				"agent", agentName,
+				"session", telemetrySessionID,
+				"error", tokenErr,
+			)
 		}
 	}
 

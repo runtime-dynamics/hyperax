@@ -129,8 +129,9 @@ const (
 	EventToolUseLoopError     EventType = "tooluse.loop.error"
 	EventToolUseCycleDetected EventType = "tooluse.cycle.detected"
 	EventToolUseToolDispatch  EventType = "tooluse.tool.dispatch"
-	EventToolUseAutoExtend    EventType = "tooluse.loop.auto_extend"
-	EventToolUseMaxIterReached EventType = "tooluse.loop.max_iter_reached"
+	EventToolUseAutoExtend         EventType = "tooluse.loop.auto_extend"
+	EventToolUseMaxIterReached     EventType = "tooluse.loop.max_iter_reached"
+	EventToolUseGuardrailTriggered EventType = "tooluse.guardrail.triggered"
 
 	// Guard System
 	EventGuardPending  EventType = "guard.pending"

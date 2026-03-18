@@ -86,7 +86,7 @@ func (m *mockTelemetryRepo) EndSession(_ context.Context, id string) error {
 	return nil
 }
 
-func (m *mockTelemetryRepo) UpdateSessionStats(_ context.Context, id string, toolCalls int, totalCost float64) error {
+func (m *mockTelemetryRepo) UpdateSessionStats(_ context.Context, id string, toolCalls int, totalCost float64, promptTokens, completionTokens, totalTokens int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	s, ok := m.sessions[id]
@@ -95,6 +95,9 @@ func (m *mockTelemetryRepo) UpdateSessionStats(_ context.Context, id string, too
 	}
 	s.ToolCalls = toolCalls
 	s.TotalCost = totalCost
+	s.PromptTokens = promptTokens
+	s.CompletionTokens = completionTokens
+	s.TotalTokens = totalTokens
 	return nil
 }
 

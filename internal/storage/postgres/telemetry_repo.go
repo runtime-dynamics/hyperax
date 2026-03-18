@@ -27,10 +27,13 @@ func (r *TelemetryRepo) CreateSession(ctx context.Context, session *types.Sessio
 	}
 
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO sessions (id, agent_id, provider_id, model, started_at, tool_calls, total_cost, status, metadata)
-		 VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8)`,
+		`INSERT INTO sessions (id, agent_id, provider_id, model, started_at, tool_calls, total_cost,
+		                       prompt_tokens, completion_tokens, total_tokens, status, metadata)
+		 VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8, $9, $10, $11)`,
 		session.ID, session.AgentID, session.ProviderID, session.Model,
-		session.ToolCalls, session.TotalCost, session.Status, session.Metadata,
+		session.ToolCalls, session.TotalCost,
+		session.PromptTokens, session.CompletionTokens, session.TotalTokens,
+		session.Status, session.Metadata,
 	)
 	if err != nil {
 		return "", fmt.Errorf("postgres.TelemetryRepo.CreateSession: %w", err)
@@ -46,11 +49,14 @@ func (r *TelemetryRepo) GetSession(ctx context.Context, id string) (*types.Sessi
 	err := r.db.QueryRowContext(ctx,
 		`SELECT id, agent_id, COALESCE(provider_id, ''), COALESCE(model, ''),
 		        started_at, ended_at, tool_calls, total_cost,
+		        prompt_tokens, completion_tokens, total_tokens,
 		        status, COALESCE(metadata, '{}'), created_at
 		 FROM sessions WHERE id = $1`, id,
 	).Scan(
 		&s.ID, &s.AgentID, &s.ProviderID, &s.Model, &s.StartedAt, &endedAt,
-		&s.ToolCalls, &s.TotalCost, &s.Status, &s.Metadata, &s.CreatedAt,
+		&s.ToolCalls, &s.TotalCost,
+		&s.PromptTokens, &s.CompletionTokens, &s.TotalTokens,
+		&s.Status, &s.Metadata, &s.CreatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("session %q not found", id)
@@ -70,6 +76,7 @@ func (r *TelemetryRepo) GetSession(ctx context.Context, id string) (*types.Sessi
 func (r *TelemetryRepo) ListSessions(ctx context.Context, agentID string, limit int) ([]*types.Session, error) {
 	query := `SELECT id, agent_id, COALESCE(provider_id, ''), COALESCE(model, ''),
 	                 started_at, ended_at, tool_calls, total_cost,
+	                 prompt_tokens, completion_tokens, total_tokens,
 	                 status, COALESCE(metadata, '{}'), created_at
 	          FROM sessions`
 	var args []interface{}
@@ -101,7 +108,9 @@ func (r *TelemetryRepo) ListSessions(ctx context.Context, agentID string, limit 
 
 		if err := rows.Scan(
 			&s.ID, &s.AgentID, &s.ProviderID, &s.Model, &s.StartedAt, &endedAt,
-			&s.ToolCalls, &s.TotalCost, &s.Status, &s.Metadata, &s.CreatedAt,
+			&s.ToolCalls, &s.TotalCost,
+			&s.PromptTokens, &s.CompletionTokens, &s.TotalTokens,
+			&s.Status, &s.Metadata, &s.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("postgres.TelemetryRepo.ListSessions: %w", err)
 		}
@@ -139,11 +148,14 @@ func (r *TelemetryRepo) EndSession(ctx context.Context, id string) error {
 	return nil
 }
 
-// UpdateSessionStats updates the running tool call count and total cost.
-func (r *TelemetryRepo) UpdateSessionStats(ctx context.Context, id string, toolCalls int, totalCost float64) error {
+// UpdateSessionStats updates the running tool call count, total cost, and
+// accumulated token counts for an active session.
+func (r *TelemetryRepo) UpdateSessionStats(ctx context.Context, id string, toolCalls int, totalCost float64, promptTokens, completionTokens, totalTokens int) error {
 	res, err := r.db.ExecContext(ctx,
-		`UPDATE sessions SET tool_calls = $1, total_cost = $2 WHERE id = $3`,
-		toolCalls, totalCost, id,
+		`UPDATE sessions SET tool_calls = $1, total_cost = $2,
+		        prompt_tokens = $3, completion_tokens = $4, total_tokens = $5
+		 WHERE id = $6`,
+		toolCalls, totalCost, promptTokens, completionTokens, totalTokens, id,
 	)
 	if err != nil {
 		return fmt.Errorf("postgres.TelemetryRepo.UpdateSessionStats: %w", err)
