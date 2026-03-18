@@ -5,6 +5,9 @@ BUILD_DIR=".build"
 BUILD_LOG="$BUILD_DIR/run.log"
 mkdir -p "$BUILD_DIR"
 
+cd ui
+npm install
+cd ..
 log() {
   echo "[build.sh $(date '+%H:%M:%S')] $1" | tee -a "$BUILD_LOG"
 }
