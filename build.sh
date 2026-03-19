@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env bash
 set -e
 
 BUILD_DIR=".build"
@@ -12,9 +12,18 @@ log() {
   echo "[build.sh $(date '+%H:%M:%S')] $1" | tee -a "$BUILD_LOG"
 }
 
+# Cross-OS helpers for stat and md5
+if command -v md5 &>/dev/null; then
+  md5cmd() { md5; }
+  statcmd() { stat -f '%m' "$@"; }
+else
+  md5cmd() { md5sum | cut -d' ' -f1; }
+  statcmd() { stat -c '%Y' "$@"; }
+fi
+
 # Build React UI to ui/dist/ (embedded into Go binary via go:embed).
 # Only rebuild UI if source files changed (avoids unnecessary npm run build on Go-only changes).
-UI_SRC_HASH=$(find ui/src -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' -o -name '*.html' \) -exec stat -f '%m' {} + 2>/dev/null | sort | md5)
+UI_SRC_HASH=$(find ui/src -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' -o -name '*.html' \) -print0 | sort -z | xargs -0 statcmd 2>/dev/null | md5cmd)
 HASH_FILE="$BUILD_DIR/.ui_hash"
 
 if [ ! -f "$HASH_FILE" ] || [ "$(cat "$HASH_FILE" 2>/dev/null)" != "$UI_SRC_HASH" ]; then
