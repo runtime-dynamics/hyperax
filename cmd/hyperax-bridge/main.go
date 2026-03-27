@@ -168,6 +168,43 @@ type permissionVerdict struct {
 }
 
 // ---------------------------------------------------------------------------
+// MCP Sampling types (server→client request)
+// ---------------------------------------------------------------------------
+
+// samplingMessage is a single message in a sampling/createMessage request.
+type samplingMessage struct {
+	Role    string         `json:"role"`
+	Content samplingContent `json:"content"`
+}
+
+// samplingContent is the content block within a sampling message.
+type samplingContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// samplingParams is the params object for a "sampling/createMessage" request.
+type samplingParams struct {
+	Messages       []samplingMessage `json:"messages"`
+	SystemPrompt   string            `json:"systemPrompt,omitempty"`
+	IncludeContext string            `json:"includeContext,omitempty"`
+	MaxTokens      int               `json:"maxTokens"`
+}
+
+// samplingResult is the result of a sampling/createMessage response from the client.
+type samplingResult struct {
+	Role       string         `json:"role"`
+	Content    samplingContent `json:"content"`
+	Model      string         `json:"model"`
+	StopReason string         `json:"stopReason"`
+}
+
+// pendingRequest tracks an outstanding JSON-RPC request awaiting a response.
+type pendingRequest struct {
+	ch chan jsonRPCResponse
+}
+
+// ---------------------------------------------------------------------------
 // Bridge
 // ---------------------------------------------------------------------------
 
@@ -199,6 +236,12 @@ type bridge struct {
 	// retrieved by Claude Code via check_messages.
 	msgBufMu sync.Mutex
 	msgBuf   []bufferedMessage
+
+	// pending tracks outstanding JSON-RPC requests (e.g. sampling/createMessage)
+	// awaiting a response from Claude Code. Keyed by request ID.
+	pendingMu sync.Mutex
+	pending   map[int64]*pendingRequest
+	nextReqID int64
 }
 
 // newBridge constructs a bridge instance. It does not start any goroutines.
@@ -212,8 +255,9 @@ func newBridge(hyperaxURL, sessionName, workspaceID string, logger *slog.Logger)
 		httpClient: &http.Client{
 			Timeout: httpTimeout,
 		},
-		logger: logger,
-		writer: enc,
+		logger:  logger,
+		writer:  enc,
+		pending: make(map[int64]*pendingRequest),
 	}
 }
 
@@ -244,6 +288,124 @@ func (b *bridge) sendNotification(method string, params any) error {
 	b.writerMu.Lock()
 	defer b.writerMu.Unlock()
 	return b.writer.Encode(notif)
+}
+
+// sendRequest sends a JSON-RPC request to Claude Code and blocks until a response
+// arrives, the context is cancelled, or the timeout expires. This enables server→client
+// requests like sampling/createMessage.
+func (b *bridge) sendRequest(ctx context.Context, method string, params any, timeout time.Duration) (*jsonRPCResponse, error) {
+	// Allocate a unique request ID.
+	b.pendingMu.Lock()
+	b.nextReqID++
+	id := b.nextReqID
+	pr := &pendingRequest{ch: make(chan jsonRPCResponse, 1)}
+	b.pending[id] = pr
+	b.pendingMu.Unlock()
+
+	defer func() {
+		b.pendingMu.Lock()
+		delete(b.pending, id)
+		b.pendingMu.Unlock()
+	}()
+
+	// Marshal params to json.RawMessage for the request envelope.
+	paramsBytes, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("marshal sampling params: %w", err)
+	}
+	idBytes, err := json.Marshal(id)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request id: %w", err)
+	}
+
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      idBytes,
+		Method:  method,
+		Params:  paramsBytes,
+	}
+
+	b.writerMu.Lock()
+	err = b.writer.Encode(req)
+	b.writerMu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("write sampling request: %w", err)
+	}
+
+	b.logger.Info("sent sampling request to Claude Code", "id", id, "method", method)
+
+	// Block until response, context cancellation, or timeout.
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case resp := <-pr.ch:
+		return &resp, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("sampling request %d cancelled: %w", id, ctx.Err())
+	case <-timer.C:
+		return nil, fmt.Errorf("sampling request %d timed out after %s", id, timeout)
+	}
+}
+
+// samplingTimeout is the maximum time to wait for a sampling/createMessage response.
+const samplingTimeout = 120 * time.Second
+
+// requestSampling sends a sampling/createMessage request to Claude Code with the
+// given channel message content wrapped in <channel> tags. Returns Claude's response
+// text, or an error if the request fails or times out.
+func (b *bridge) requestSampling(ctx context.Context, content string, meta map[string]any) (string, error) {
+	// Build the <channel> tagged message that matches the bridge instructions format.
+	sessionID, _ := meta["session_id"].(string)
+	taskID, _ := meta["task_id"].(string)
+
+	taggedMsg := fmt.Sprintf(`<channel source="hyperax" session_id="%s"`, sessionID)
+	if taskID != "" {
+		taggedMsg += fmt.Sprintf(` task_id="%s"`, taskID)
+	}
+	taggedMsg += fmt.Sprintf(">%s</channel>", content)
+
+	params := samplingParams{
+		Messages: []samplingMessage{
+			{
+				Role:    "user",
+				Content: samplingContent{Type: "text", Text: taggedMsg},
+			},
+		},
+		IncludeContext: "thisServer",
+		MaxTokens:      8192,
+	}
+
+	resp, err := b.sendRequest(ctx, "sampling/createMessage", params, samplingTimeout)
+	if err != nil {
+		return "", fmt.Errorf("sampling request failed: %w", err)
+	}
+
+	if resp.Error != nil {
+		return "", fmt.Errorf("sampling error %d: %s", resp.Error.Code, resp.Error.Message)
+	}
+
+	// Parse the sampling result from the response.
+	var result samplingResult
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		return "", fmt.Errorf("marshal sampling result for re-parse: %w", err)
+	}
+	if err := json.Unmarshal(resultBytes, &result); err != nil {
+		return "", fmt.Errorf("parse sampling result: %w", err)
+	}
+
+	if result.Content.Text == "" {
+		return "", fmt.Errorf("empty sampling response from Claude Code")
+	}
+
+	b.logger.Info("received sampling response",
+		"model", result.Model,
+		"stop_reason", result.StopReason,
+		"text_length", len(result.Content.Text),
+	)
+
+	return result.Content.Text, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -465,10 +627,6 @@ func (b *bridge) handleInitialize(id json.RawMessage) error {
 	result := initializeResult{
 		ProtocolVersion: protocolVersion,
 		Capabilities: map[string]any{
-			"experimental": map[string]any{
-				"claude/channel":            map[string]any{},
-				"claude/channel/permission": map[string]any{},
-			},
 			"tools": map[string]any{},
 		},
 		ServerInfo: serverInfo{
@@ -674,6 +832,8 @@ func (b *bridge) dispatchRequest(ctx context.Context, msg jsonRPCRequest) {
 // ---------------------------------------------------------------------------
 
 // runStdinReader reads JSON-RPC messages from stdin and dispatches them.
+// It handles both requests/notifications (from Claude Code) and responses
+// (to our outstanding sampling/createMessage requests).
 // It returns when stdin reaches EOF or the context is cancelled.
 func (b *bridge) runStdinReader(ctx context.Context) {
 	scanner := bufio.NewScanner(os.Stdin)
@@ -692,6 +852,13 @@ func (b *bridge) runStdinReader(ctx context.Context) {
 			continue
 		}
 
+		// First try to detect if this is a response to one of our pending requests.
+		// Responses have an "id" and either "result" or "error", but no "method".
+		if b.tryRouteResponse(line) {
+			continue
+		}
+
+		// Otherwise parse as request/notification.
 		var msg jsonRPCRequest
 		if err := json.Unmarshal(line, &msg); err != nil {
 			b.logger.Warn("malformed JSON-RPC message", "error", err, "raw", string(line))
@@ -707,7 +874,67 @@ func (b *bridge) runStdinReader(ctx context.Context) {
 	b.logger.Info("stdin closed, shutting down")
 }
 
-// runEventPoller polls HyperAX for events and pushes them to Claude Code.
+// tryRouteResponse checks if a raw JSON-RPC message is a response to a pending
+// request. Returns true if the message was consumed as a response.
+func (b *bridge) tryRouteResponse(line []byte) bool {
+	// Quick structural check: a response has "result" or "error" at the top level.
+	// We parse into a generic envelope to detect this without full deserialization.
+	var envelope struct {
+		ID     json.RawMessage `json:"id"`
+		Method string          `json:"method"`
+		Result json.RawMessage `json:"result"`
+		Error  *rpcError       `json:"error"`
+	}
+	if err := json.Unmarshal(line, &envelope); err != nil {
+		return false
+	}
+
+	// If it has a method, it's a request/notification — not a response.
+	if envelope.Method != "" {
+		return false
+	}
+
+	// Must have either result or error to be a valid response.
+	if envelope.Result == nil && envelope.Error == nil {
+		return false
+	}
+
+	// Parse the numeric ID to match against our pending map.
+	var numericID int64
+	if err := json.Unmarshal(envelope.ID, &numericID); err != nil {
+		b.logger.Warn("response with non-numeric ID, ignoring", "id", string(envelope.ID))
+		return false
+	}
+
+	b.pendingMu.Lock()
+	pr, ok := b.pending[numericID]
+	b.pendingMu.Unlock()
+
+	if !ok {
+		b.logger.Warn("response for unknown request ID", "id", numericID)
+		return true // consumed but orphaned
+	}
+
+	resp := jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      envelope.ID,
+		Error:   envelope.Error,
+	}
+	// Store Result as-is for the caller to parse.
+	if envelope.Result != nil {
+		resp.Result = envelope.Result
+	}
+
+	select {
+	case pr.ch <- resp:
+		b.logger.Debug("routed response to pending request", "id", numericID)
+	default:
+		b.logger.Warn("pending channel full, dropping response", "id", numericID)
+	}
+	return true
+}
+
+// runEventPoller polls HyperAX for events and relays them to Claude Code.
 func (b *bridge) runEventPoller(ctx context.Context) {
 	ticker := time.NewTicker(eventPollInterval)
 	defer ticker.Stop()
@@ -724,7 +951,7 @@ func (b *bridge) runEventPoller(ctx context.Context) {
 			}
 
 			for _, evt := range events {
-				if err := b.relayEvent(evt); err != nil {
+				if err := b.relayEvent(ctx, evt); err != nil {
 					b.logger.Error("failed to relay event to Claude Code", "error", err, "event_id", evt.ID)
 				}
 			}
@@ -745,10 +972,19 @@ func parseMeta(raw string) map[string]any {
 	return m
 }
 
-// relayEvent sends a single polled event to Claude Code as the appropriate notification type.
-// Permission verdict events are sent as notifications/claude/channel/permission;
-// all other events are sent as notifications/claude/channel.
-func (b *bridge) relayEvent(evt channelEvent) error {
+// relayEvent delivers a single polled event to Claude Code.
+//
+// For message events, the bridge uses MCP Sampling (sampling/createMessage) to push
+// the message to Claude Code and trigger a response — the same push-style delivery
+// that CommHub uses for internal agents. The response is automatically relayed back
+// to HyperAX as an inbound reply.
+//
+// For permission verdicts, the original notification path is preserved since Claude
+// Code needs the verdict to unblock a pending permission request.
+//
+// Messages are also buffered so check_messages can serve as a fallback if sampling
+// is unavailable or fails.
+func (b *bridge) relayEvent(ctx context.Context, evt channelEvent) error {
 	meta := parseMeta(evt.Meta)
 
 	// Permission verdicts need special routing so Claude Code unblocks the pending request.
@@ -767,20 +1003,12 @@ func (b *bridge) relayEvent(evt channelEvent) error {
 		return b.sendNotification("notifications/claude/channel/permission", verdict)
 	}
 
-	// Default: general channel notification.
 	// Ensure session_id is in meta so the reply tool knows where to respond.
 	if _, ok := meta["session_id"]; !ok {
 		meta["session_id"] = b.sessionID
 	}
 
-	params := channelNotificationParams{
-		Content: evt.Content,
-		Meta:    meta,
-	}
-
-	// Buffer the message locally so Claude Code can retrieve it via check_messages.
-	// The notification below may be silently dropped if Claude Code doesn't support
-	// the experimental channel capability, so the buffer is the reliable path.
+	// Always buffer for check_messages fallback.
 	b.msgBufMu.Lock()
 	b.msgBuf = append(b.msgBuf, bufferedMessage{
 		ID:         evt.ID,
@@ -791,12 +1019,64 @@ func (b *bridge) relayEvent(evt channelEvent) error {
 	})
 	b.msgBufMu.Unlock()
 
-	// Still attempt the push notification for forward compatibility.
-	if err := b.sendNotification("notifications/claude/channel", params); err != nil {
-		b.logger.Warn("channel notification failed (buffered for check_messages)", "error", err)
+	// Use MCP Sampling to push the message to Claude Code and get a response.
+	// This is the primary delivery path — same push model as CommHub for internal agents.
+	b.logger.Info("requesting sampling for channel message", "event_id", evt.ID, "session_id", meta["session_id"])
+
+	responseText, err := b.requestSampling(ctx, evt.Content, meta)
+	if err != nil {
+		b.logger.Warn("sampling request failed, message buffered for check_messages",
+			"event_id", evt.ID,
+			"error", err,
+		)
+		// Fall back to the legacy notification for forward compatibility.
+		if notifErr := b.sendNotification("notifications/claude/channel", channelNotificationParams{
+			Content: evt.Content,
+			Meta:    meta,
+		}); notifErr != nil {
+			b.logger.Warn("fallback notification also failed", "error", notifErr)
+		}
+		return nil // non-fatal: message is buffered
 	}
-	b.logger.Debug("buffered event for Claude Code", "event_id", evt.ID, "type", evt.EventType)
+
+	// Drain the buffered copy since sampling succeeded — Claude Code already processed it.
+	b.drainBufferedEvent(evt.ID)
+
+	// Auto-reply Claude's response back to HyperAX.
+	sessionID, _ := meta["session_id"].(string)
+	if sessionID == "" {
+		sessionID = b.sessionID
+	}
+	taskID, _ := meta["task_id"].(string)
+
+	replyArgs := replyArguments{
+		SessionID: sessionID,
+		Text:      responseText,
+		TaskID:    taskID,
+	}
+	if err := b.postReply(ctx, sessionID, replyArgs); err != nil {
+		return fmt.Errorf("auto-reply after sampling failed: %w", err)
+	}
+
+	b.logger.Info("sampling round-trip complete",
+		"event_id", evt.ID,
+		"session_id", sessionID,
+		"response_length", len(responseText),
+	)
 	return nil
+}
+
+// drainBufferedEvent removes a specific event from the message buffer after it
+// has been successfully delivered via sampling (no need for check_messages fallback).
+func (b *bridge) drainBufferedEvent(eventID string) {
+	b.msgBufMu.Lock()
+	defer b.msgBufMu.Unlock()
+	for i, msg := range b.msgBuf {
+		if msg.ID == eventID {
+			b.msgBuf = append(b.msgBuf[:i], b.msgBuf[i+1:]...)
+			return
+		}
+	}
 }
 
 // runHeartbeat sends periodic heartbeats to HyperAX.

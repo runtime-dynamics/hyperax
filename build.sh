@@ -26,22 +26,19 @@ fi
 UI_SRC_HASH=$(find ui/src -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' -o -name '*.html' \) -print0 | sort -z | xargs -0 statcmd 2>/dev/null | md5cmd)
 HASH_FILE="$BUILD_DIR/.ui_hash"
 
-if [ ! -f "$HASH_FILE" ] || [ "$(cat "$HASH_FILE" 2>/dev/null)" != "$UI_SRC_HASH" ]; then
-  log "UI sources changed, rebuilding React..."
-  if (cd ui && npm run build 2>&1 | tee -a "$BUILD_LOG"); then
-    echo "$UI_SRC_HASH" > "$HASH_FILE"
-    log "UI build succeeded."
-  else
-    log "WARNING: UI build failed — continuing with existing ui/dist/"
-    # Don't abort — Go binary can still be built with the last good ui/dist/
-  fi
+log "UI sources changed, rebuilding React..."
+if (cd ui && npm run build 2>&1 | tee -a "$BUILD_LOG"); then
+  echo "$UI_SRC_HASH" > "$HASH_FILE"
+  log "UI build succeeded."
 else
-  log "UI unchanged, skipping React build."
+  log "WARNING: UI build failed — continuing with existing ui/dist/"
+  # Don't abort — Go binary can still be built with the last good ui/dist/
 fi
+  
 rm -f "$BUILD_DIR/hyperax" "$BUILD_DIR/hyperax-bridge"
 
 # Build Go binaries
-log "Building hyperax..."
+log "Building hyperax... to: $BUILD_DIR/hyperax"
 if go build -o "$BUILD_DIR/hyperax" ./cmd/hyperax 2>&1 | tee -a "$BUILD_LOG"; then
   log "hyperax build succeeded."
 else
@@ -49,7 +46,7 @@ else
   exit 1
 fi
 
-log "Building hyperax-bridge..."
+log "Building hyperax-bridge... to: $BUILD_DIR/hyperax-bridge"
 if go build -o "$BUILD_DIR/hyperax-bridge" ./cmd/hyperax-bridge 2>&1 | tee -a "$BUILD_LOG"; then
   log "hyperax-bridge build succeeded."
 else

@@ -245,6 +245,76 @@ Claude Code ←── stdio (JSON-RPC) ──→ hyperax-bridge ←── HTTP �
 3. Claude Code works on it, then calls the `reply` tool
 4. The bridge forwards the reply to Hyperax — task status updates, response shows in chat
 
+### Automated Polling with `/loop`
+
+The bridge provides two MCP tools to Claude Code: `check_messages` (pull buffered events) and `reply` (send responses back). By default, Claude Code must manually call `check_messages` to receive pending messages and tasks. The `/loop` command turns this into a continuous, hands-free workflow.
+
+**Start the loop:**
+
+```
+/loop 2m check_messages from hyperax-bridge, process any new messages/events/tasks, and reply back. For task dispatches, work on the task and update status. For chat messages, respond conversationally via the reply tool.
+```
+
+This creates a recurring cron job (`*/2 * * * *`) that runs every 2 minutes inside your Claude Code session. Each cycle:
+
+1. Calls `check_messages` to drain any buffered events from Hyperax
+2. Processes each event by type:
+   - **Chat messages** — responds conversationally via the `reply` tool
+   - **Task dispatches** — works on the task, then replies with `status: completed` (or `blocked`/`in_progress`)
+   - **Permission verdicts** — applies approval/denial decisions from the dashboard
+3. Replies are forwarded back to Hyperax and appear in the dashboard chat interface
+
+**Customize the interval:**
+
+```
+/loop 30s ...    # every 30 seconds (aggressive, good for active pairing)
+/loop 5m ...     # every 5 minutes (relaxed, good for background work)
+/loop 10m ...    # every 10 minutes (low overhead, periodic check-ins)
+```
+
+**Customize the behavior:**
+
+The prompt after the interval controls what Claude Code does with incoming events. You can tailor it to your workflow:
+
+```
+# Code review focus
+/loop 2m check_messages from hyperax-bridge. For task dispatches, review the code changes described in the task, provide feedback via reply, and mark as needs_review. For chat messages, reply conversationally.
+
+# Autonomous development
+/loop 2m check_messages from hyperax-bridge. For task dispatches, implement the requested changes, run tests, and reply with a summary. Mark completed tasks as completed, blocked tasks as blocked. For chat messages, reply conversationally.
+
+# Triage only
+/loop 5m check_messages from hyperax-bridge. Summarize any new messages or tasks via reply but do not take action. Ask for confirmation before starting work.
+```
+
+**Manage the loop:**
+
+- The loop is **session-scoped** — it stops when the Claude Code session ends
+- Recurring jobs **auto-expire after 7 days**
+- Cancel early: run `CronDelete <job-id>` (the job ID is shown when the loop is created)
+- The first check runs immediately when `/loop` is invoked — no waiting for the first cron tick
+
+**End-to-end flow with `/loop` active:**
+
+```
+You (Hyperax Dashboard)          Hyperax Server         hyperax-bridge         Claude Code
+        │                              │                       │                     │
+        ├── Send message ─────────────►│                       │                     │
+        │                              ├── Enqueue event ─────►│                     │
+        │                              │                       │◄── /loop fires ─────┤
+        │                              │                       ├── check_messages ──►│
+        │                              │                       │◄── process + reply ──┤
+        │◄──────────── Reply appears ──┤◄── forward reply ─────┤                     │
+        │                              │                       │                     │
+        ├── Dispatch Task ────────────►│                       │                     │
+        │                              ├── Enqueue task ──────►│                     │
+        │                              │                       │◄── /loop fires ─────┤
+        │                              │                       ├── check_messages ──►│
+        │                              │                       │    (works on task)   │
+        │                              │                       │◄── reply + status ───┤
+        │◄──── Task marked complete ───┤◄── forward reply ─────┤                     │
+```
+
 ### Sessions Tab
 
 The dashboard **Sessions** tab gives you:
