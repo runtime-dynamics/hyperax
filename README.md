@@ -23,13 +23,14 @@ Hyperax ships as **one static binary, zero runtime dependencies, sub-100ms start
 
 ## Quick Start
 
-**Binary download (recommended):**
+### 1. Build & Run
+
+**Binary download:**
 
 ```bash
-# Download the latest release for your platform
 curl -L https://github.com/runtime-dynamics/hyperax/releases/latest/download/hyperax_$(uname -s)_$(uname -m).tar.gz | tar xz
 ./hyperax init        # interactive setup wizard
-./hyperax serve       # start the server on :9090
+./hyperax serve       # start on :9090
 ```
 
 **Build from source:**
@@ -37,24 +38,40 @@ curl -L https://github.com/runtime-dynamics/hyperax/releases/latest/download/hyp
 ```bash
 git clone https://github.com/runtime-dynamics/hyperax
 cd hyperax
-go build -o hyperax ./cmd/hyperax
+./build.sh            # produces hyperax + hyperax-bridge binaries
 ./hyperax init
 ./hyperax serve
 ```
 
-**Connect your AI assistant** — add to your `claude_desktop_config.json` or MCP config:
+### 2. Connect Claude Code
 
-```json
-{
-  "mcpServers": {
-    "hyperax": {
-      "url": "http://localhost:9090/mcp"
-    }
-  }
-}
+**Add Hyperax as an MCP server** (gives Claude Code access to all 17 tools):
+
+```bash
+claude mcp add hyperax --transport sse http://localhost:9090/mcp/sse
 ```
 
-Open `http://localhost:9090` to access the dashboard.
+That's it. Claude Code now has access to code search, project management, pipelines, observability, and everything else Hyperax provides.
+
+### 3. Enable Channels (optional)
+
+If you want Hyperax to push tasks, messages, and approval prompts directly into your Claude Code session, add the bridge:
+
+```bash
+claude mcp add hyperax-bridge -- /path/to/hyperax-bridge --url http://localhost:9090
+```
+
+Then start Claude Code with the channel active:
+
+```bash
+claude --channels server:hyperax-bridge
+```
+
+The bridge appears as a connected session in the Hyperax dashboard **Sessions** tab. See [Claude Code Channel Integration](#claude-code-channel-integration) for details.
+
+### 4. Dashboard
+
+Open `http://localhost:9090` for the full dashboard — agents, pipelines, tasks, chat, observability, and sessions.
 
 ---
 
@@ -80,6 +97,7 @@ Connect Hyperax to Claude Code, Cursor, Copilot, or any MCP-capable client. Your
 | `governance` | ABAC policy, interjection control, audit trail |
 | `plugin` | Plugin install, config, and lifecycle management |
 | `refactor` | Transaction-safe symbol moves, code block operations, import management |
+| `channel` | Claude Code session management, message push, task dispatch, permission relay |
 | `audit` | Full audit log with structured event recording |
 
 Workspace identity is git-native — a workspace IS a git repository, identified by its unique commit graph. Submodules are discovered automatically and indexed as separate workspaces.
@@ -170,6 +188,103 @@ Five plugin types: **MCP** (full tool/list discovery), **Service** (subprocess w
 
 Official plugins: [github.com/runtime-dynamics](https://github.com/runtime-dynamics)
 Build your own: [docs/PluginDevelopment.md](docs/PluginDevelopment.md)
+
+---
+
+## Claude Code Channel Integration
+
+Hyperax includes a **channel bridge** that pushes events directly into a running Claude Code session using the [channel protocol](https://code.claude.com/docs/en/channels). This turns Hyperax into a task dispatcher that keeps Claude Code busy while you're away.
+
+### What Channels Enable
+
+- **Task dispatch** — Hyperax picks the next pending task and pushes it to Claude Code. Claude works on it, reports back, task gets marked complete. Repeat.
+- **Remote chat** — send messages to your Claude Code session from the Hyperax dashboard on your phone
+- **Permission relay** — when Claude Code needs to run a command and asks for approval, the prompt appears in the dashboard with Approve/Deny buttons
+
+### Setup
+
+The build produces two binaries:
+
+```bash
+./build.sh
+# Output:
+#   hyperax          — the server
+#   hyperax-bridge   — the Claude Code channel bridge (stdio MCP server)
+```
+
+**Step 1** — Add Hyperax as an MCP server (tools only, no channel push):
+
+```bash
+claude mcp add hyperax --transport sse http://localhost:9090/mcp/sse
+```
+
+**Step 2** — Add the bridge for channel push support:
+
+```bash
+claude mcp add hyperax-bridge -- /path/to/hyperax-bridge --url http://localhost:9090
+```
+
+**Step 3** — Start Claude Code with the channel active:
+
+```bash
+claude --channels server:hyperax-bridge
+```
+
+The session appears in the dashboard **Sessions** tab immediately.
+
+You can also generate or merge a `.mcp.json` file with `hyperax bridge-config`:
+
+```bash
+# Print the config snippet
+hyperax bridge-config --url http://localhost:9090
+
+# Write directly to .mcp.json
+hyperax bridge-config --url http://my-server:9090 --name "backend-dev" --output .mcp.json
+```
+
+### How It Works
+
+```
+Claude Code ←── stdio (JSON-RPC) ──→ hyperax-bridge ←── HTTP ──→ Hyperax Server
+                                                                       ↑
+                                                            Dashboard (Sessions tab)
+```
+
+1. Hyperax enqueues an event (task, message, or notification)
+2. The bridge polls every 2s and pushes it to Claude Code as a `<channel source="hyperax">` tag
+3. Claude Code works on it, then calls the `reply` tool
+4. The bridge forwards the reply to Hyperax — task status updates, response shows in chat
+
+### Sessions Tab
+
+The dashboard **Sessions** tab gives you:
+
+- **Connected sessions** with live status indicators
+- **Chat interface** per session — type a message, it gets pushed to Claude Code, reply appears in chat
+- **Permission relay** — approve or deny tool-use prompts remotely
+- **Task dispatch** — pick a pending task and push it to any session with one click
+
+### Remote Access
+
+Put Hyperax behind an nginx reverse proxy for mobile access:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name hyperax.yourdomain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:9090;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+Approve tasks, chat with Claude Code, and monitor progress from your phone.
 
 ---
 

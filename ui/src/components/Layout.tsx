@@ -63,6 +63,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { path: '/org', label: 'Organization', exact: false },
     { path: '/docs', label: 'Documentation', exact: false },
     { path: '/audit', label: 'Audit', exact: false },
+    { path: '/sessions', label: 'Sessions', exact: false },
     { path: '/actions', label: 'Actions', exact: false, badge: totalActionable, alert: totalActionable > 0 },
     { path: '/settings', label: 'Settings', exact: false },
   ]

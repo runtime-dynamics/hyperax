@@ -38,12 +38,23 @@ if [ ! -f "$HASH_FILE" ] || [ "$(cat "$HASH_FILE" 2>/dev/null)" != "$UI_SRC_HASH
 else
   log "UI unchanged, skipping React build."
 fi
-rm -f $BUILD_DIR/hyperax
-# Build Go binary
-log "Building Go binary..."
+rm -f "$BUILD_DIR/hyperax" "$BUILD_DIR/hyperax-bridge"
+
+# Build Go binaries
+log "Building hyperax..."
 if go build -o "$BUILD_DIR/hyperax" ./cmd/hyperax 2>&1 | tee -a "$BUILD_LOG"; then
-  log "Go build succeeded."
+  log "hyperax build succeeded."
 else
-  log "ERROR: Go build failed."
+  log "ERROR: hyperax build failed."
   exit 1
 fi
+
+log "Building hyperax-bridge..."
+if go build -o "$BUILD_DIR/hyperax-bridge" ./cmd/hyperax-bridge 2>&1 | tee -a "$BUILD_LOG"; then
+  log "hyperax-bridge build succeeded."
+else
+  log "ERROR: hyperax-bridge build failed."
+  exit 1
+fi
+
+log "Done. Binaries: $BUILD_DIR/hyperax, $BUILD_DIR/hyperax-bridge"

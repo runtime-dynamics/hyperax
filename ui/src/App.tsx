@@ -16,6 +16,7 @@ import { SecuritySection } from './views/settings/sections/SecuritySection'
 import { ActionsPage } from './views/actions/ActionsPage'
 import { DocsPage } from './views/docs/DocsPage'
 import { AuditPage } from './views/audit/AuditPage'
+import { SessionsPage } from './views/sessions/SessionsPage'
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
         <Route path="/actions" element={<ActionsPage />} />
         <Route path="/docs" element={<DocsPage />} />
         <Route path="/audit" element={<AuditPage />} />
+        <Route path="/sessions" element={<SessionsPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/providers" replace />} />
           <Route path="providers" element={<ProvidersSection />} />

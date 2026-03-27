@@ -167,6 +167,18 @@ const (
 	EventChannelBridgeReviewDone  EventType = "channel.bridge.review.done"
 	EventChannelBridgeResponse    EventType = "channel.bridge.response"
 	EventChannelBridgeError       EventType = "channel.bridge.error"
+
+	// Channel Sessions (Claude Code integration)
+	EventChannelSessionConnected    EventType = "channel.session.connected"
+	EventChannelSessionDisconnected EventType = "channel.session.disconnected"
+	EventChannelSessionHeartbeat    EventType = "channel.session.heartbeat"
+	EventChannelEventPushed         EventType = "channel.event.pushed"
+	EventChannelEventDelivered      EventType = "channel.event.delivered"
+	EventChannelReplyReceived       EventType = "channel.reply.received"
+	EventChannelPermissionRequested EventType = "channel.permission.requested"
+	EventChannelPermissionResolved  EventType = "channel.permission.resolved"
+	EventChannelTaskDispatched      EventType = "channel.task.dispatched"
+	EventChannelTaskCompleted       EventType = "channel.task.completed"
 )
 
 // NervousEvent is the universal event envelope for the Nervous System.

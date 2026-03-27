@@ -40,6 +40,7 @@ func main() {
 	rootCmd.AddCommand(versionCmd())
 	rootCmd.AddCommand(doctorCmd())
 	rootCmd.AddCommand(approveCmd())
+	rootCmd.AddCommand(bridgeConfigCmd())
 
 	// Default to serve when no subcommand is given
 	rootCmd.RunE = serve.RunE

@@ -96,6 +96,9 @@ func BuildRouter(application *app.HyperaxApp, uiFS fs.FS, sqlDB *sql.DB) http.Ha
 	obsHandler := handlers.NewObservabilityHandler(application.Store, application.Logger)
 	mcpServer.RegisterHandler(obsHandler)
 
+	// Channel session handler (Claude Code bridge integration via MCP)
+	mcpServer.RegisterHandler(handlers.NewChannelHandler(application.Store, application.Bus, application.Logger))
+
 	// Phase 2 handlers: Memory, Secret (Lifecycle + Delegation absorbed into agent)
 	mcpServer.RegisterHandler(handlers.NewMemoryHandler(application.MemoryEngine))
 	agentHandler.SetMemoryDeps(application.MemoryEngine)
@@ -695,6 +698,8 @@ func BuildRouter(application *app.HyperaxApp, uiFS fs.FS, sqlDB *sql.DB) http.Ha
 			if application.InterjectionMgr != nil {
 				r.Mount("/interjections", api.NewInterjectionAPI(application.InterjectionMgr).Routes())
 			}
+			// Channel bridge REST API (for hyperax-bridge binary, NOT dashboard).
+			r.Mount("/channels", api.NewChannelsAPI(application.Store, application.Bus, application.Logger).Routes())
 		})
 	})
 

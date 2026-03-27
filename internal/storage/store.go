@@ -39,7 +39,8 @@ type Store struct {
 	ExternalDocs  repo.ExternalDocRepo
 	Sessions      repo.SessionRepo
 	WorkQueue     repo.WorkQueueRepo
-	Specs repo.SpecRepo
+	Specs    repo.SpecRepo
+	Channels repo.ChannelRepo
 
 	// Closer is the underlying database connection closer.
 	Closer io.Closer

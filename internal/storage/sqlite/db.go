@@ -104,8 +104,9 @@ func (d *DB) NewStore() *storage.Store {
 		ExternalDocs:  NewExternalDocRepoSQLite(d.db),
 		Sessions:      &SessionRepo{db: d.db},
 		WorkQueue:     &WorkQueueRepo{db: d.db},
-		Specs:  &SpecRepo{db: d.db},
-		Closer: d,
+		Specs:    &SpecRepo{db: d.db},
+		Channels: &ChannelRepo{db: d.db},
+		Closer:   d,
 	}
 }
 
