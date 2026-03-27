@@ -17,6 +17,8 @@ import type { Agent } from '@/services/agentService'
 import { useProviders, parseModels } from '@/services/providerService'
 import type { Provider } from '@/services/providerService'
 import { useSessionContext } from '@/contexts/SessionContext'
+import { useChannelSessions } from '@/services/channelService'
+import { ChatPanel as ChannelChatPanel } from '@/views/sessions/SessionsPage'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -254,6 +256,12 @@ function OnboardingStepper({
 }
 
 export default function ChatPage() {
+  // Channel session state — when set, renders the channel ChatPanel instead of agent chat
+  const [selectedChannelSessionId, setSelectedChannelSessionId] = useState<string | null>(null)
+  const { data: rawChannelSessions } = useChannelSessions()
+  const channelSessions = Array.isArray(rawChannelSessions) ? rawChannelSessions : []
+  const selectedChannelSession = channelSessions.find((s) => s.id === selectedChannelSessionId) ?? null
+
   // Use SessionContext for session management instead of local state
   const { activeSessionId, getOrCreateSession, switchSession } = useSessionContext()
 
@@ -442,6 +450,7 @@ export default function ChatPage() {
   // Handle agent selection from sidebar
   // Creates or switches to a persistent session
   async function handleSelectAgent(agentId: string) {
+    setSelectedChannelSessionId(null) // Clear channel selection
     try {
       console.log('🔄 Switching to agent:', agentId)
       await switchSession(agentId) // Creates persistent session
@@ -456,6 +465,11 @@ export default function ChatPage() {
     }
   }
 
+  // Handle Claude Code channel session selection from sidebar
+  function handleSelectChannelSession(sessionId: string) {
+    setSelectedChannelSessionId(sessionId)
+  }
+
   const isSending = sendMessage.isPending
 
   function handleArchiveSession(agentName: string) {
@@ -464,8 +478,22 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
-      <AgentSidebar selectedAgentId={selectedAgentId} onSelectAgent={handleSelectAgent} />
+      <AgentSidebar
+        selectedAgentId={selectedChannelSessionId ? undefined : selectedAgentId}
+        onSelectAgent={handleSelectAgent}
+        selectedChannelSessionId={selectedChannelSessionId ?? undefined}
+        onSelectChannelSession={handleSelectChannelSession}
+      />
 
+      {selectedChannelSession ? (
+        <div className="flex-1 min-w-0">
+          <ChannelChatPanel
+            key={selectedChannelSession.id}
+            session={selectedChannelSession}
+            onDisconnect={() => setSelectedChannelSessionId(null)}
+          />
+        </div>
+      ) : (
       <div className="flex-1 flex flex-col min-w-0">
         <ChatTabBar onArchiveSession={handleArchiveSession} />
 
@@ -574,6 +602,7 @@ export default function ChatPage() {
 
         <EventStream />
       </div>
+      )}
     </div>
   )
 }

@@ -74,8 +74,8 @@ Examples:
 
 			fmt.Println(string(data))
 			fmt.Fprintln(os.Stderr, "")
-			fmt.Fprintln(os.Stderr, "Add this to your .mcp.json, then start Claude Code with:")
-			fmt.Fprintln(os.Stderr, "  claude --channels server:hyperax")
+			fmt.Fprintln(os.Stderr, "Add this to your .mcp.json, then start Claude Code.")
+			fmt.Fprintln(os.Stderr, "The channel activates automatically via MCP capability negotiation.")
 			return nil
 		},
 	}
@@ -151,7 +151,6 @@ func writeOrMergeMCPConfig(path, bridgePath string, bridgeArgs []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "Wrote hyperax bridge config to %s\n", path)
-	fmt.Fprintln(os.Stderr, "Start Claude Code with:")
-	fmt.Fprintln(os.Stderr, "  claude --channels server:hyperax")
+	fmt.Fprintln(os.Stderr, "Start Claude Code — the channel activates automatically via MCP capability negotiation.")
 	return nil
 }

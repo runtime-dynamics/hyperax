@@ -140,10 +140,10 @@ type toolResultContent struct {
 
 // channelEvent represents a single event received from the HyperAX event poll.
 type channelEvent struct {
-	ID        string                 `json:"id"`
-	Content   string                 `json:"content"`
-	Meta      map[string]any `json:"meta"`
-	EventType string                 `json:"event_type"`
+	ID        string `json:"id"`
+	Content   string `json:"content"`
+	Meta      string `json:"meta"`       // JSON string from server; parsed in relayEvent
+	EventType string `json:"event_type"`
 }
 
 // channelNotificationParams is sent to Claude Code as a channel notification.
@@ -171,6 +171,16 @@ type permissionVerdict struct {
 // Bridge
 // ---------------------------------------------------------------------------
 
+// bufferedMessage is a channel event held in local memory until Claude Code
+// retrieves it via the check_messages tool.
+type bufferedMessage struct {
+	ID         string         `json:"id"`
+	Content    string         `json:"content"`
+	Meta       map[string]any `json:"meta"`
+	EventType  string         `json:"event_type"`
+	ReceivedAt time.Time      `json:"received_at"`
+}
+
 // bridge is the core runtime that connects Claude Code (stdio) to HyperAX (HTTP).
 type bridge struct {
 	hyperaxURL  string
@@ -184,6 +194,11 @@ type bridge struct {
 	// writer serialises JSON-RPC writes to stdout.
 	writerMu sync.Mutex
 	writer   *json.Encoder
+
+	// msgBuf holds channel events that were polled from HyperAX but not yet
+	// retrieved by Claude Code via check_messages.
+	msgBufMu sync.Mutex
+	msgBuf   []bufferedMessage
 }
 
 // newBridge constructs a bridge instance. It does not start any goroutines.
@@ -356,17 +371,20 @@ func (b *bridge) pollEvents(ctx context.Context) ([]channelEvent, error) {
 		return nil, fmt.Errorf("poll returned status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	var events []channelEvent
-	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+	var envelope struct {
+		Events []channelEvent `json:"events"`
+		Count  int            `json:"count"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
 		return nil, fmt.Errorf("decode poll response: %w", err)
 	}
-	return events, nil
+	return envelope.Events, nil
 }
 
 // postReply sends a reply to HyperAX for the given session.
 func (b *bridge) postReply(ctx context.Context, sessionID string, args replyArguments) error {
 	body := map[string]string{
-		"text": args.Text,
+		"content": args.Text,
 	}
 	if args.TaskID != "" {
 		body["task_id"] = args.TaskID
@@ -401,7 +419,7 @@ func (b *bridge) postReply(ctx context.Context, sessionID string, args replyArgu
 		}
 	}()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("reply returned status %d: %s", resp.StatusCode, string(respBody))
 	}
@@ -495,6 +513,14 @@ func (b *bridge) handleToolsList(id json.RawMessage) error {
 					"required": []string{"text"},
 				},
 			},
+			{
+				Name:        "check_messages",
+				Description: "Check for new messages from HyperAX. Call this periodically or when you expect incoming messages. Returns any buffered channel events that arrived since the last check.",
+				InputSchema: map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
 		},
 	}
 	return b.sendResponse(id, result, nil)
@@ -513,6 +539,8 @@ func (b *bridge) handleToolCall(ctx context.Context, id json.RawMessage, rawPara
 	switch params.Name {
 	case "reply":
 		return b.handleReplyTool(ctx, id, params.Arguments)
+	case "check_messages":
+		return b.handleCheckMessages(id)
 	default:
 		return b.sendResponse(id, nil, &rpcError{
 			Code:    -32602,
@@ -548,6 +576,33 @@ func (b *bridge) handleReplyTool(ctx context.Context, id json.RawMessage, rawArg
 
 	return b.sendResponse(id, toolCallResult{
 		Content: []toolResultContent{{Type: "text", Text: "Reply sent successfully"}},
+	}, nil)
+}
+
+// handleCheckMessages drains the local message buffer and returns all pending messages.
+func (b *bridge) handleCheckMessages(id json.RawMessage) error {
+	b.msgBufMu.Lock()
+	msgs := b.msgBuf
+	b.msgBuf = nil
+	b.msgBufMu.Unlock()
+
+	if len(msgs) == 0 {
+		return b.sendResponse(id, toolCallResult{
+			Content: []toolResultContent{{Type: "text", Text: "No new messages."}},
+		}, nil)
+	}
+
+	payload, err := json.Marshal(msgs)
+	if err != nil {
+		return b.sendResponse(id, toolCallResult{
+			Content: []toolResultContent{{Type: "text", Text: fmt.Sprintf("marshal error: %v", err)}},
+			IsError: true,
+		}, nil)
+	}
+
+	b.logger.Info("check_messages returning buffered events", "count", len(msgs))
+	return b.sendResponse(id, toolCallResult{
+		Content: []toolResultContent{{Type: "text", Text: string(payload)}},
 	}, nil)
 }
 
@@ -677,31 +732,42 @@ func (b *bridge) runEventPoller(ctx context.Context) {
 	}
 }
 
+// parseMeta parses the Meta JSON string from the server into a map.
+// Returns an empty map if the string is empty or invalid JSON.
+func parseMeta(raw string) map[string]any {
+	if raw == "" {
+		return make(map[string]any)
+	}
+	var m map[string]any
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return make(map[string]any)
+	}
+	return m
+}
+
 // relayEvent sends a single polled event to Claude Code as the appropriate notification type.
 // Permission verdict events are sent as notifications/claude/channel/permission;
 // all other events are sent as notifications/claude/channel.
 func (b *bridge) relayEvent(evt channelEvent) error {
+	meta := parseMeta(evt.Meta)
+
 	// Permission verdicts need special routing so Claude Code unblocks the pending request.
 	if evt.EventType == "permission_verdict" {
 		verdict := permissionVerdict{}
-		if reqID, ok := evt.Meta["request_id"].(string); ok {
+		if reqID, ok := meta["request_id"].(string); ok {
 			verdict.RequestID = reqID
 		}
-		if behavior, ok := evt.Meta["behavior"].(string); ok {
+		if behavior, ok := meta["behavior"].(string); ok {
 			verdict.Behavior = behavior
 		}
 		if verdict.RequestID == "" || verdict.Behavior == "" {
-			return fmt.Errorf("permission_verdict event missing request_id or behavior: %v", evt.Meta)
+			return fmt.Errorf("permission_verdict event missing request_id or behavior: %v", meta)
 		}
 		b.logger.Info("relaying permission verdict", "request_id", verdict.RequestID, "behavior", verdict.Behavior)
 		return b.sendNotification("notifications/claude/channel/permission", verdict)
 	}
 
 	// Default: general channel notification.
-	meta := evt.Meta
-	if meta == nil {
-		meta = make(map[string]any)
-	}
 	// Ensure session_id is in meta so the reply tool knows where to respond.
 	if _, ok := meta["session_id"]; !ok {
 		meta["session_id"] = b.sessionID
@@ -712,10 +778,24 @@ func (b *bridge) relayEvent(evt channelEvent) error {
 		Meta:    meta,
 	}
 
+	// Buffer the message locally so Claude Code can retrieve it via check_messages.
+	// The notification below may be silently dropped if Claude Code doesn't support
+	// the experimental channel capability, so the buffer is the reliable path.
+	b.msgBufMu.Lock()
+	b.msgBuf = append(b.msgBuf, bufferedMessage{
+		ID:         evt.ID,
+		Content:    evt.Content,
+		Meta:       meta,
+		EventType:  evt.EventType,
+		ReceivedAt: time.Now(),
+	})
+	b.msgBufMu.Unlock()
+
+	// Still attempt the push notification for forward compatibility.
 	if err := b.sendNotification("notifications/claude/channel", params); err != nil {
-		return err
+		b.logger.Warn("channel notification failed (buffered for check_messages)", "error", err)
 	}
-	b.logger.Debug("pushed event to Claude Code", "event_id", evt.ID, "type", evt.EventType)
+	b.logger.Debug("buffered event for Claude Code", "event_id", evt.ID, "type", evt.EventType)
 	return nil
 }
 

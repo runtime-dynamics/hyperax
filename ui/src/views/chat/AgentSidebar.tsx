@@ -1,9 +1,10 @@
 import { useEffect } from 'react'
-import { User, Inbox, AlertTriangle, Settings, Star } from 'lucide-react'
+import { User, Inbox, AlertTriangle, Settings, Star, Terminal, Circle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAgents, type Agent } from '@/services/agentService'
 import { useProviders, parseModels, type Provider } from '@/services/providerService'
 import { useAgentInboxes } from '@/services/commhubService'
+import { useChannelSessions, type ChannelSession } from '@/services/channelService'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,8 @@ import { cn } from '@/lib/utils'
 interface AgentSidebarProps {
   selectedAgentId?: string
   onSelectAgent?: (id: string) => void
+  selectedChannelSessionId?: string
+  onSelectChannelSession?: (id: string) => void
 }
 
 function getConfigStatus(agent: Agent, providers: Provider[]): 'configured' | 'no-model' | 'provider-disabled' {
@@ -36,10 +39,15 @@ function isChiefOfStaff(agent: Agent): boolean {
   return agent.clearance_level === 3 || agent.name.toLowerCase() === 'chief of staff'
 }
 
-export function AgentSidebar({ selectedAgentId, onSelectAgent }: AgentSidebarProps) {
+export function AgentSidebar({ selectedAgentId, onSelectAgent, selectedChannelSessionId, onSelectChannelSession }: AgentSidebarProps) {
   const { data: rawAgents, isLoading: loadingAgents } = useAgents()
   const { data: rawProviders } = useProviders()
   const { data: inboxes } = useAgentInboxes()
+  const { data: rawSessions } = useChannelSessions()
+
+  const connectedSessions = (Array.isArray(rawSessions) ? rawSessions : []).filter(
+    (s: ChannelSession) => s.status === 'connected',
+  )
 
   const agents = Array.isArray(rawAgents) ? rawAgents : []
   const providers = Array.isArray(rawProviders) ? rawProviders : []
@@ -56,12 +64,12 @@ export function AgentSidebar({ selectedAgentId, onSelectAgent }: AgentSidebarPro
     Array.isArray(inboxes) ? inboxes.map((i) => [i.agent_id, i.message_count ?? 0]) : [],
   )
 
-  // Auto-select the first agent if none is selected and agents exist
+  // Auto-select the first agent if none is selected and no channel session is active
   useEffect(() => {
-    if (!selectedAgentId && favoriteAgents.length > 0 && onSelectAgent) {
+    if (!selectedAgentId && !selectedChannelSessionId && favoriteAgents.length > 0 && onSelectAgent) {
       onSelectAgent(favoriteAgents[0].id)
     }
-  }, [selectedAgentId, favoriteAgents.length, onSelectAgent])
+  }, [selectedAgentId, selectedChannelSessionId, favoriteAgents.length, onSelectAgent])
 
   return (
     <aside className="w-64 border-r bg-card flex flex-col shrink-0">
@@ -139,6 +147,44 @@ export function AgentSidebar({ selectedAgentId, onSelectAgent }: AgentSidebarPro
           })
         )}
       </div>
+
+      {/* Claude Code sessions */}
+      {connectedSessions.length > 0 && (
+        <>
+          <div className="p-4 border-t border-b">
+            <h2 className="text-sm font-semibold flex items-center gap-1.5">
+              <Terminal className="h-3.5 w-3.5" />
+              Claude Code
+              <Badge variant="outline" className="text-[10px] h-4 px-1.5 ml-auto">
+                {connectedSessions.length}
+              </Badge>
+            </h2>
+          </div>
+          <div className="overflow-y-auto p-2">
+            {connectedSessions.map((session: ChannelSession) => (
+              <button
+                key={session.id}
+                onClick={() => onSelectChannelSession?.(session.id)}
+                className={cn(
+                  'w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left text-sm transition-colors',
+                  selectedChannelSessionId === session.id
+                    ? 'bg-accent text-accent-foreground'
+                    : 'hover:bg-accent/50 text-foreground',
+                )}
+              >
+                <Terminal className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{session.name}</div>
+                  {session.workspace && (
+                    <div className="text-xs text-muted-foreground truncate">{session.workspace}</div>
+                  )}
+                </div>
+                <Circle className="h-2 w-2 fill-green-500 text-green-500 shrink-0" />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </aside>
   )
 }

@@ -23,18 +23,19 @@ import (
 
 // actionClearanceWorkspace maps each workspace action to its minimum ABAC clearance.
 var actionClearanceWorkspace = map[string]int{
-	"list":             0, // was list_workspaces
-	"register":         1, // was register_workspace
-	"delete":           1, // was delete_workspace
-	"get_structure":    0, // was get_project_structure
-	"list_files":       0, // was list_files_in_dir
-	"reindex":          1, // was trigger_reindex
-	"git_info":         0, // was get_git_info
-	"diff":             0, // was diff_file
-	"recent_changes":   0, // was get_recent_changes
-	"connect_mcp":      2, // was connect_mcp_server
-	"disconnect_mcp":   2, // was disconnect_mcp_server
-	"refresh_mcp":      2, // was refresh_mcp_connection
+	"list":                 0, // was list_workspaces
+	"register":             1, // was register_workspace
+	"delete":               1, // was delete_workspace
+	"get_structure":        0, // was get_project_structure
+	"list_files":           0, // was list_files_in_dir
+	"browse_directories":   0, // browse local filesystem to find workspace paths
+	"reindex":              1, // was trigger_reindex
+	"git_info":             0, // was get_git_info
+	"diff":                 0, // was diff_file
+	"recent_changes":       0, // was get_recent_changes
+	"connect_mcp":          2, // was connect_mcp_server
+	"disconnect_mcp":       2, // was disconnect_mcp_server
+	"refresh_mcp":          2, // was refresh_mcp_connection
 	"list_mcp_connections": 0, // was list_mcp_connections
 }
 
@@ -62,18 +63,18 @@ func (h *WorkspaceHandler) RegisterTools(registry *mcp.ToolRegistry) {
 		"workspace",
 		"Workspace management: list, register, delete workspaces; browse structure and files; "+
 			"reindex; git info, diff, recent changes; MCP federation. "+
-			"Actions: list | register | delete | get_structure | list_files | reindex | "+
+			"Actions: list | register | delete | get_structure | list_files | browse_directories | reindex | "+
 			"git_info | diff | recent_changes | connect_mcp | disconnect_mcp | refresh_mcp | list_mcp_connections",
 		json.RawMessage(`{
 			"type": "object",
 			"properties": {
-				"action":          {"type": "string", "enum": ["list", "register", "delete", "get_structure", "list_files", "reindex", "git_info", "diff", "recent_changes", "connect_mcp", "disconnect_mcp", "refresh_mcp", "list_mcp_connections"], "description": "Action to perform"},
+				"action":          {"type": "string", "enum": ["list", "register", "delete", "get_structure", "list_files", "browse_directories", "reindex", "git_info", "diff", "recent_changes", "connect_mcp", "disconnect_mcp", "refresh_mcp", "list_mcp_connections"], "description": "Action to perform"},
 				"workspace_name":  {"type": "string", "description": "Workspace name"},
-				"name":            {"type": "string", "description": "Workspace name (register action)"},
+				"name":            {"type": "string", "description": "Workspace name (register action, defaults to directory basename)"},
 				"root_path":       {"type": "string", "description": "Absolute path to workspace root (register action)"},
 				"max_depth":       {"type": "integer", "description": "Max directory depth (get_structure, default 3)"},
 				"include_files":   {"type": "boolean", "description": "Include files in tree (get_structure, default true)"},
-				"path":            {"type": "string", "description": "Relative path within workspace"},
+				"path":            {"type": "string", "description": "Relative path within workspace, or absolute path for browse_directories"},
 				"limit":           {"type": "integer", "description": "Max commits (recent_changes, default 10)"},
 				"endpoint":        {"type": "string", "description": "Remote MCP server URL (connect_mcp)"},
 				"auth_token":      {"type": "string", "description": "Bearer token (connect_mcp)"},
@@ -108,6 +109,8 @@ func (h *WorkspaceHandler) dispatch(ctx context.Context, params json.RawMessage)
 		return h.getProjectStructure(ctx, params)
 	case "list_files":
 		return h.listFilesInDir(ctx, params)
+	case "browse_directories":
+		return h.browseDirectories(ctx, params)
 	case "reindex":
 		return h.triggerReindex(ctx, params)
 	case "git_info":
@@ -150,11 +153,12 @@ func (h *WorkspaceHandler) registerWorkspace(ctx context.Context, params json.Ra
 	if err := json.Unmarshal(params, &args); err != nil {
 		return nil, fmt.Errorf("handlers.WorkspaceHandler.registerWorkspace: %w", err)
 	}
-	if args.Name == "" {
-		return types.NewErrorResult("name is required"), nil
-	}
 	if args.RootPath == "" {
 		return types.NewErrorResult("root_path is required"), nil
+	}
+	// Auto-derive name from the directory basename when not provided.
+	if args.Name == "" {
+		args.Name = filepath.Base(args.RootPath)
 	}
 
 	info, err := os.Stat(args.RootPath)
@@ -165,7 +169,7 @@ func (h *WorkspaceHandler) registerWorkspace(ctx context.Context, params json.Ra
 		return types.NewErrorResult(fmt.Sprintf("root_path %q is not a directory", args.RootPath)), nil
 	}
 
-	wsID := generateWorkspaceID(args.RootPath)
+	wsID := generateWorkspaceID(args.Name, args.RootPath)
 
 	existing, existErr := h.store.Workspaces.GetWorkspace(ctx, args.Name)
 	if existErr == nil && existing != nil && existing.ID != wsID {
@@ -291,6 +295,86 @@ func (h *WorkspaceHandler) listFilesInDir(ctx context.Context, params json.RawMe
 	})
 
 	return types.NewToolResult(files), nil
+}
+
+// browseDirectories lists directories (and optionally files) at an absolute
+// filesystem path, allowing callers to navigate the local filesystem before
+// choosing a workspace root_path. Defaults to the user's home directory.
+func (h *WorkspaceHandler) browseDirectories(_ context.Context, params json.RawMessage) (*types.ToolResult, error) {
+	var args struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(params, &args); err != nil {
+		return nil, fmt.Errorf("handlers.WorkspaceHandler.browseDirectories: %w", err)
+	}
+
+	if args.Path == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			args.Path = "/"
+		} else {
+			args.Path = home
+		}
+	}
+
+	abs, err := filepath.Abs(args.Path)
+	if err != nil {
+		return types.NewErrorResult(fmt.Sprintf("invalid path: %v", err)), nil
+	}
+
+	info, err := os.Stat(abs)
+	if err != nil {
+		return types.NewErrorResult(fmt.Sprintf("path %q not found: %v", abs, err)), nil
+	}
+	if !info.IsDir() {
+		return types.NewErrorResult(fmt.Sprintf("%q is not a directory", abs)), nil
+	}
+
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		return types.NewErrorResult(fmt.Sprintf("read dir: %v", err)), nil
+	}
+
+	type dirEntry struct {
+		Name  string `json:"name"`
+		Path  string `json:"path"`
+		IsDir bool   `json:"is_dir"`
+		IsGit bool   `json:"is_git,omitempty"`
+	}
+
+	items := make([]dirEntry, 0, len(entries))
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		full := filepath.Join(abs, e.Name())
+		de := dirEntry{
+			Name:  e.Name(),
+			Path:  full,
+			IsDir: e.IsDir(),
+		}
+		if e.IsDir() {
+			// Flag directories that are git repos to help identify workspace candidates.
+			if _, gitErr := os.Stat(filepath.Join(full, ".git")); gitErr == nil {
+				de.IsGit = true
+			}
+		}
+		items = append(items, de)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].IsDir != items[j].IsDir {
+			return items[i].IsDir
+		}
+		return items[i].Name < items[j].Name
+	})
+
+	return types.NewToolResult(map[string]any{
+		"current_path": abs,
+		"parent":       filepath.Dir(abs),
+		"entries":      items,
+		"count":        len(items),
+	}), nil
 }
 
 func (h *WorkspaceHandler) triggerReindex(ctx context.Context, params json.RawMessage) (*types.ToolResult, error) {
@@ -546,24 +630,14 @@ func (h *WorkspaceHandler) listMCPConnections(_ context.Context, _ json.RawMessa
 
 // ---------- helpers ----------
 
-func generateWorkspaceID(rootPath string) string {
-	cmd := exec.Command("git", "-C", rootPath, "remote", "get-url", "origin")
-	out, err := cmd.Output()
-	var source string
-	if err == nil {
-		source = strings.TrimSpace(string(out))
+func generateWorkspaceID(name, rootPath string) string {
+	abs, absErr := filepath.Abs(rootPath)
+	if absErr != nil {
+		abs = rootPath
 	}
-	if source == "" {
-		abs, absErr := filepath.Abs(rootPath)
-		if absErr == nil {
-			source = abs
-		} else {
-			source = rootPath
-		}
-	}
-	if source == "" {
-		source = "fallback:" + rootPath
-	}
+	// Include both name and path so distinct workspaces always get distinct IDs,
+	// even when they share a git remote or filesystem path.
+	source := name + "\x00" + abs
 	hash := sha256.Sum256([]byte(source))
 	return "ws-" + hex.EncodeToString(hash[:8])
 }

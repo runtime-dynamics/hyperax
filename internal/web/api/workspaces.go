@@ -1,7 +1,13 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hyperax/hyperax/internal/repo"
@@ -21,6 +27,7 @@ func (a *WorkspaceAPI) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", a.list)
 	r.Post("/", a.create)
+	r.Get("/browse", a.browse)
 	r.Get("/{name}", a.get)
 	r.Delete("/{name}", a.remove)
 	return r
@@ -55,12 +62,23 @@ func (a *WorkspaceAPI) create(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.Name == "" || body.RootPath == "" {
-		respondError(w, r, http.StatusBadRequest, "name and root_path are required")
+	if body.RootPath == "" {
+		respondError(w, r, http.StatusBadRequest, "root_path is required")
 		return
 	}
+	if body.Name == "" {
+		body.Name = filepath.Base(body.RootPath)
+	}
+
+	abs, err := filepath.Abs(body.RootPath)
+	if err != nil {
+		abs = body.RootPath
+	}
+	hash := sha256.Sum256([]byte(body.Name + "\x00" + abs))
+	wsID := "ws-" + hex.EncodeToString(hash[:8])
 
 	ws := &types.WorkspaceInfo{
+		ID:       wsID,
 		Name:     body.Name,
 		RootPath: body.RootPath,
 		Metadata: body.Metadata,
@@ -70,6 +88,83 @@ func (a *WorkspaceAPI) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondJSON(w, r, http.StatusCreated, ws)
+}
+
+// browse lists directories at an absolute path so the UI can navigate the
+// filesystem to select a workspace root. Query param: ?path=/some/dir
+// Defaults to the user's home directory.
+func (a *WorkspaceAPI) browse(w http.ResponseWriter, r *http.Request) {
+	dir := r.URL.Query().Get("path")
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			dir = "/"
+		} else {
+			dir = home
+		}
+	}
+
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		respondError(w, r, http.StatusBadRequest, "invalid path")
+		return
+	}
+
+	info, err := os.Stat(abs)
+	if err != nil {
+		respondError(w, r, http.StatusNotFound, "path not found")
+		return
+	}
+	if !info.IsDir() {
+		respondError(w, r, http.StatusBadRequest, "path is not a directory")
+		return
+	}
+
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		respondError(w, r, http.StatusInternalServerError, "failed to read directory")
+		return
+	}
+
+	type dirEntry struct {
+		Name  string `json:"name"`
+		Path  string `json:"path"`
+		IsDir bool   `json:"is_dir"`
+		IsGit bool   `json:"is_git,omitempty"`
+	}
+
+	items := make([]dirEntry, 0, len(entries))
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		full := filepath.Join(abs, e.Name())
+		de := dirEntry{
+			Name:  e.Name(),
+			Path:  full,
+			IsDir: e.IsDir(),
+		}
+		if e.IsDir() {
+			if _, gitErr := os.Stat(filepath.Join(full, ".git")); gitErr == nil {
+				de.IsGit = true
+			}
+		}
+		items = append(items, de)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].IsDir != items[j].IsDir {
+			return items[i].IsDir
+		}
+		return items[i].Name < items[j].Name
+	})
+
+	respondJSON(w, r, http.StatusOK, map[string]any{
+		"current_path": abs,
+		"parent":       filepath.Dir(abs),
+		"entries":      items,
+		"count":        len(items),
+	})
 }
 
 func (a *WorkspaceAPI) remove(w http.ResponseWriter, r *http.Request) {

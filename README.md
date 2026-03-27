@@ -55,17 +55,13 @@ That's it. Claude Code now has access to code search, project management, pipeli
 
 ### 3. Enable Channels (optional)
 
-If you want Hyperax to push tasks, messages, and approval prompts directly into your Claude Code session, add the bridge:
+If you want Hyperax to push tasks, messages, and approval prompts directly into your Claude Code session, add the bridge as an MCP server:
 
 ```bash
 claude mcp add hyperax-bridge -- /path/to/hyperax-bridge --url http://localhost:9090
 ```
 
-Then start Claude Code with the channel active:
-
-```bash
-claude --channels server:hyperax-bridge
-```
+That's all — Claude Code auto-detects the channel capability when the bridge declares `experimental: { "claude/channel": {} }` during MCP initialization. No additional CLI flags are needed.
 
 The bridge appears as a connected session in the Hyperax dashboard **Sessions** tab. See [Claude Code Channel Integration](#claude-code-channel-integration) for details.
 
@@ -224,13 +220,7 @@ claude mcp add hyperax --transport sse http://localhost:9090/mcp/sse
 claude mcp add hyperax-bridge -- /path/to/hyperax-bridge --url http://localhost:9090
 ```
 
-**Step 3** — Start Claude Code with the channel active:
-
-```bash
-claude --channels server:hyperax-bridge
-```
-
-The session appears in the dashboard **Sessions** tab immediately.
+Claude Code auto-detects the channel capability when the bridge MCP server initializes. No additional CLI flags are required — the session appears in the dashboard **Sessions** tab as soon as Claude Code starts and initializes the bridge.
 
 You can also generate or merge a `.mcp.json` file with `hyperax bridge-config`:
 

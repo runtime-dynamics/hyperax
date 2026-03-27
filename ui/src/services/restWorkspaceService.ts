@@ -40,3 +40,22 @@ export function useRestDeleteWorkspace() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['rest-workspaces'] }),
   })
 }
+
+export interface BrowseEntry {
+  name: string
+  path: string
+  is_dir: boolean
+  is_git?: boolean
+}
+
+export interface BrowseResult {
+  current_path: string
+  parent: string
+  entries: BrowseEntry[]
+  count: number
+}
+
+export async function browseDirectories(path?: string): Promise<BrowseResult> {
+  const params = path ? `?path=${encodeURIComponent(path)}` : ''
+  return apiGet<BrowseResult>(`/workspaces/browse${params}`)
+}

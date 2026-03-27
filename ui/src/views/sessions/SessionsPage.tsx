@@ -317,7 +317,7 @@ interface ChatPanelProps {
   onDisconnect: () => void
 }
 
-function ChatPanel({ session, onDisconnect }: ChatPanelProps) {
+export function ChatPanel({ session, onDisconnect }: ChatPanelProps) {
   const [input, setInput] = useState('')
   const [dispatchOpen, setDispatchOpen] = useState(false)
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)

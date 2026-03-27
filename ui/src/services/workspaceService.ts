@@ -19,7 +19,7 @@ export function useWorkspaces() {
 export function useRegisterWorkspace() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (args: { name: string; root_path: string }) =>
+    mutationFn: (args: { name?: string; root_path: string }) =>
       mcpCall('workspace', { action: 'register', ...(args as Record<string, unknown>) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['workspaces'] }),
   })
