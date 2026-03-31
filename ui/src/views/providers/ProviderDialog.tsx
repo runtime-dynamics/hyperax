@@ -26,6 +26,7 @@ const KIND_OPTIONS = [
   { value: 'openai', label: 'OpenAI' },
   { value: 'anthropic', label: 'Anthropic' },
   { value: 'google', label: 'Google Gemini' },
+  { value: 'google-vertex', label: 'Google Vertex AI' },
   { value: 'ollama', label: 'Ollama' },
   { value: 'azure', label: 'Azure OpenAI' },
   { value: 'bedrock', label: 'AWS Bedrock' },
@@ -37,6 +38,7 @@ const MANAGED_BASE_URLS: Record<string, string> = {
   openai: 'https://api.openai.com/v1',
   anthropic: 'https://api.anthropic.com',
   google: 'https://generativelanguage.googleapis.com',
+  'google-vertex': 'https://us-central1-aiplatform.googleapis.com',
 }
 
 export interface ProviderDialogProps {
@@ -63,6 +65,31 @@ export function ProviderDialog({ open, onOpenChange, editTarget, onCreate, onUpd
   const [kindError, setKindError] = useState('')
   const [urlError, setUrlError] = useState('')
 
+  // Google Vertex metadata
+  const [projectId, setProjectId] = useState('')
+  const [location, setLocation] = useState('')
+  const [credentials, setCredentials] = useState('')
+
+  // Parse existing metadata for editing
+  useEffect(() => {
+    if (editTarget?.metadata) {
+      try {
+        const meta = JSON.parse(editTarget.metadata)
+        setProjectId(meta.project_id ?? '')
+        setLocation(meta.location ?? '')
+        setCredentials(meta.credentials ?? '')
+      } catch {
+        setProjectId('')
+        setLocation('')
+        setCredentials('')
+      }
+    } else {
+      setProjectId('')
+      setLocation('')
+      setCredentials('')
+    }
+  }, [editTarget])
+
   useEffect(() => {
     if (open) {
       setName(editTarget?.name ?? '')
@@ -76,6 +103,22 @@ export function ProviderDialog({ open, onOpenChange, editTarget, onCreate, onUpd
       setNameError('')
       setKindError('')
       setUrlError('')
+      if (editTarget?.metadata) {
+        try {
+          const meta = JSON.parse(editTarget.metadata)
+          setProjectId(meta.project_id ?? '')
+          setLocation(meta.location ?? '')
+          setCredentials(meta.credentials ?? '')
+        } catch {
+          setProjectId('')
+          setLocation('')
+          setCredentials('')
+        }
+      } else {
+        setProjectId('')
+        setLocation('')
+        setCredentials('')
+      }
     }
   }, [open, editTarget])
 
@@ -91,6 +134,22 @@ export function ProviderDialog({ open, onOpenChange, editTarget, onCreate, onUpd
     setNameError('')
     setKindError('')
     setUrlError('')
+    if (target?.metadata) {
+      try {
+        const meta = JSON.parse(target.metadata)
+        setProjectId(meta.project_id ?? '')
+        setLocation(meta.location ?? '')
+        setCredentials(meta.credentials ?? '')
+      } catch {
+        setProjectId('')
+        setLocation('')
+        setCredentials('')
+      }
+    } else {
+      setProjectId('')
+      setLocation('')
+      setCredentials('')
+    }
   }
 
   function addModel() {
@@ -140,9 +199,21 @@ export function ProviderDialog({ open, onOpenChange, editTarget, onCreate, onUpd
     const effectiveUrl = MANAGED_BASE_URLS[kind] ?? baseUrl
     const modelsPayload = modelsList.length > 0 ? JSON.stringify(modelsList) : '[]'
 
+    // Build metadata for google-vertex
+    let metadata = ''
+    if (kind === 'google-vertex') {
+      const meta: Record<string, string> = {}
+      if (projectId) meta.project_id = projectId
+      if (location) meta.location = location
+      if (credentials) meta.credentials = credentials
+      if (Object.keys(meta).length > 0) {
+        metadata = JSON.stringify(meta)
+      }
+    }
+
     if (isEdit && editTarget) {
       onUpdate(
-        { id: editTarget.id, name, kind, base_url: effectiveUrl, is_enabled: isEnabled, models: modelsPayload, ...(apiKey ? { api_key: apiKey } : {}) },
+        { id: editTarget.id, name, kind, base_url: effectiveUrl, is_enabled: isEnabled, models: modelsPayload, ...(apiKey ? { api_key: apiKey } : {}), ...(metadata ? { metadata } : {}) },
         {
           onSuccess: () => handleOpenChange(false),
           onError: () => {},
@@ -150,7 +221,7 @@ export function ProviderDialog({ open, onOpenChange, editTarget, onCreate, onUpd
       )
     } else {
       onCreate(
-        { name, kind, base_url: effectiveUrl, is_enabled: isEnabled, is_default: isDefault, models: modelsPayload, ...(apiKey ? { api_key: apiKey } : {}) },
+        { name, kind, base_url: effectiveUrl, is_enabled: isEnabled, is_default: isDefault, models: modelsPayload, ...(apiKey ? { api_key: apiKey } : {}), ...(metadata ? { metadata } : {}) },
         {
           onSuccess: () => handleOpenChange(false),
           onError: () => {},
@@ -244,6 +315,40 @@ export function ProviderDialog({ open, onOpenChange, editTarget, onCreate, onUpd
                   : 'Your API key will be securely stored. Leave blank for unauthenticated providers (e.g. Ollama).'}
             </p>
           </div>
+
+          {/* Google Vertex AI metadata fields */}
+          {kind === 'google-vertex' && (
+            <div className="space-y-3 border-t pt-3">
+              <p className="text-sm font-medium">Google Vertex AI Configuration</p>
+              <div className="space-y-1.5">
+                <Label htmlFor="pr-project-id">GCP Project ID</Label>
+                <Input
+                  id="pr-project-id"
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  placeholder="my-gcp-project"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pr-location">Location</Label>
+                <Input
+                  id="pr-location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="us-central1"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pr-credentials">Credentials File Path</Label>
+                <Input
+                  id="pr-credentials"
+                  value={credentials}
+                  onChange={(e) => setCredentials(e.target.value)}
+                  placeholder="/path/to/service-account.json"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label>Models</Label>

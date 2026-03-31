@@ -34,7 +34,7 @@ func sampleResults() []types.ToolCallResult {
 // ── Factory tests ───────────────────────────────────────────────────────────
 
 func TestNewToolAdapter_SupportedKinds(t *testing.T) {
-	kinds := []string{"anthropic", "openai", "ollama", "azure", "custom", "google", "bedrock"}
+	kinds := []string{"anthropic", "openai", "ollama", "azure", "custom", "google", "google-vertex", "bedrock"}
 	for _, kind := range kinds {
 		a, err := NewToolAdapter(kind)
 		if err != nil {

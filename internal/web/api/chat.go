@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -416,6 +417,20 @@ func (a *ChatAPI) generateResponse(agentName, userID, latestMessage, sessionID s
 
 	a.logger.Info("chat completion: API key resolved", "agent", agentName, "has_key", apiKey != "")
 
+	// 4b. Parse metadata for google-vertex provider.
+	var projectID, location, credentials string
+	if prov.Metadata != "" {
+		var metadata map[string]string
+		if err := json.Unmarshal([]byte(prov.Metadata), &metadata); err != nil {
+			a.logger.Warn("chat completion: failed to parse provider metadata",
+				"agent", agentName, "provider", prov.Name, "error", err)
+		} else {
+			projectID = metadata["project_id"]
+			location = metadata["location"]
+			credentials = metadata["credentials"]
+		}
+	}
+
 	// 5. Build conversation history from comm log with structured prompt.
 	messages := a.buildMessagesFromAgent(ctx, agent, agentName, userID, latestMessage, sessionID)
 
@@ -627,6 +642,9 @@ func (a *ChatAPI) generateResponse(agentName, userID, latestMessage, sessionID s
 			BaseURL:           prov.BaseURL,
 			APIKey:            apiKey,
 			Model:             workModel,
+			ProjectID:         projectID,
+			Location:          location,
+			Credentials:       credentials,
 			ClearanceLevel:    agent.ClearanceLevel,
 			DelegationScopes:  delegScopes,
 			AllowedActions:    allowedActions,
@@ -659,12 +677,15 @@ func (a *ChatAPI) generateResponse(agentName, userID, latestMessage, sessionID s
 	} else {
 		// Direct completion path: use chatModel (cheap model for conversation).
 		resp, compErr := provider.ChatCompletion(ctx, &provider.CompletionRequest{
-			Kind:      prov.Kind,
-			BaseURL:   prov.BaseURL,
-			APIKey:    apiKey,
-			Model:     chatModel,
-			Messages:  messages,
-			AgentName: agentName,
+			Kind:        prov.Kind,
+			BaseURL:     prov.BaseURL,
+			APIKey:      apiKey,
+			Model:       chatModel,
+			Messages:    messages,
+			AgentName:   agentName,
+			ProjectID:   projectID,
+			Location:    location,
+			Credentials: credentials,
 		})
 		if compErr != nil {
 			a.logger.Error("chat completion: LLM call failed",

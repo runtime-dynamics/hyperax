@@ -15,16 +15,26 @@ import (
 
 	v4signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	gcpcredentials "cloud.google.com/go/auth/credentials"
+	"google.golang.org/genai"
 )
 
 // discoveryTimeout is the HTTP client timeout for model discovery requests.
 const discoveryTimeout = 10 * time.Second
 
 // DiscoverModels fetches the list of available models from a provider's API.
-// Supported kinds: ollama, openai, anthropic, azure, custom.
+// Supported kinds: ollama, openai, anthropic, azure, google, google-vertex, bedrock, custom.
 // Custom (OpenAI Compatible API) providers attempt OpenAI-style discovery
 // and fall back to an empty slice with a logged warning on failure.
-func DiscoverModels(ctx context.Context, kind, baseURL, apiKey string) ([]string, error) {
+// For google-vertex, projectID, location, and credentials can be provided for authentication.
+func DiscoverModels(ctx context.Context, kind, baseURL, apiKey string, extra ...string) ([]string, error) {
+	var projectID, location, credentials string
+	if len(extra) >= 3 {
+		projectID = extra[0]
+		location = extra[1]
+		credentials = extra[2]
+	}
+
 	switch strings.ToLower(kind) {
 	case "ollama":
 		return discoverOllama(ctx, baseURL)
@@ -36,6 +46,8 @@ func DiscoverModels(ctx context.Context, kind, baseURL, apiKey string) ([]string
 		return discoverAzure(ctx, baseURL, apiKey)
 	case "google":
 		return discoverGoogle(ctx, baseURL, apiKey)
+	case "google-vertex":
+		return discoverGoogleVertex(ctx, baseURL, apiKey, projectID, location, credentials)
 	case "bedrock":
 		return discoverBedrock(ctx, baseURL, apiKey)
 	case "custom":
@@ -213,6 +225,104 @@ func discoverGoogle(ctx context.Context, baseURL, apiKey string) ([]string, erro
 			models = append(models, name)
 		}
 	}
+	sort.Strings(models)
+	return models, nil
+}
+
+// discoverGoogleVertex fetches models from Google Vertex AI API.
+// Endpoint: GET {baseURL}/v1/models?key={apiKey}
+// For Vertex AI with credentials, uses the genai SDK to discover models.
+func discoverGoogleVertex(ctx context.Context, baseURL, apiKey, projectID, location, credentials string) ([]string, error) {
+	if projectID != "" {
+		return discoverGoogleVertexSDK(ctx, baseURL, apiKey, projectID, location, credentials)
+	}
+
+	url := strings.TrimRight(baseURL, "/") + "/v1/models?key=" + apiKey
+
+	headers := map[string]string{}
+	body, err := doGet(ctx, url, headers)
+	if err != nil {
+		return nil, fmt.Errorf("provider.discoverGoogleVertex: %w", err)
+	}
+
+	var resp struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("provider.discoverGoogleVertex: parse response: %w", err)
+	}
+
+	models := make([]string, 0, len(resp.Models))
+	for _, m := range resp.Models {
+		name := m.Name
+		name = strings.TrimPrefix(name, "projects/")
+		name = strings.TrimPrefix(name, "locations/")
+		name = strings.TrimPrefix(name, "models/")
+		if name != "" {
+			models = append(models, name)
+		}
+	}
+	sort.Strings(models)
+	return models, nil
+}
+
+// discoverGoogleVertexSDK uses the genai SDK to discover models from Vertex AI.
+func discoverGoogleVertexSDK(ctx context.Context, baseURL, apiKey, projectID, location, credentials string) ([]string, error) {
+	clientCfg := &genai.ClientConfig{
+		Backend: genai.BackendVertexAI,
+		HTTPOptions: genai.HTTPOptions{
+			Timeout: genai.Ptr(discoveryTimeout),
+		},
+	}
+
+	if projectID != "" {
+		clientCfg.Project = projectID
+	}
+	if location != "" {
+		clientCfg.Location = location
+	} else {
+		clientCfg.Location = "us-central1"
+	}
+
+	if credentials != "" {
+		creds, err := gcpcredentials.DetectDefault(&gcpcredentials.DetectOptions{
+			Scopes:          []string{"https://www.googleapis.com/auth/cloud-platform"},
+			CredentialsFile: credentials,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("provider.discoverGoogleVertexSDK: load credentials: %w", err)
+		}
+		clientCfg.Credentials = creds
+	}
+
+	client, err := genai.NewClient(ctx, clientCfg)
+	if err != nil {
+		return nil, fmt.Errorf("provider.discoverGoogleVertexSDK: create client: %w", err)
+	}
+
+	var models []string
+	page, err := client.Models.List(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("provider.discoverGoogleVertexSDK: list models: %w", err)
+	}
+
+	for {
+		for _, m := range page.Items {
+			models = append(models, m.Name)
+		}
+
+		if page.NextPageToken == "" {
+			break
+		}
+
+		page, err = page.Next(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("provider.discoverGoogleVertexSDK: list models (page): %w", err)
+		}
+	}
+
 	sort.Strings(models)
 	return models, nil
 }
