@@ -39,14 +39,14 @@ type ProviderToolAdapter interface {
 
 // NewToolAdapter returns the appropriate ProviderToolAdapter for the given
 // provider kind string. Supported kinds: anthropic, openai, ollama, azure,
-// custom, google, bedrock. Returns an error for unsupported kinds.
+// custom, google, google-vertex, bedrock. Returns an error for unsupported kinds.
 func NewToolAdapter(providerKind string) (ProviderToolAdapter, error) {
 	switch strings.ToLower(providerKind) {
 	case "anthropic":
 		return &AnthropicAdapter{}, nil
 	case "openai", "ollama", "azure", "custom":
 		return &OpenAIAdapter{}, nil
-	case "google":
+	case "google", "google-vertex":
 		return &GoogleAdapter{}, nil
 	case "bedrock":
 		return &BedrockAdapter{}, nil

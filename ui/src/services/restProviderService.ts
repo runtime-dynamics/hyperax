@@ -23,6 +23,7 @@ export interface CreateProviderArgs {
   models?: string
   is_default?: boolean
   is_enabled?: boolean
+  metadata?: string
 }
 
 export interface TestResult {

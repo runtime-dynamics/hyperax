@@ -30,6 +30,7 @@ const KIND_LABELS: Record<string, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   google: 'Google Gemini',
+  'google-vertex': 'Google Vertex AI',
   ollama: 'Ollama',
   azure: 'Azure OpenAI',
   bedrock: 'AWS Bedrock',

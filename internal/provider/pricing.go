@@ -41,6 +41,14 @@ var providerPricing = map[string][]struct {
 		{Prefix: "gemini-1.5-pro", Rate: tokenRate{InputPerMillion: 1.25, OutputPerMillion: 5.0}},
 		{Prefix: "gemini-1.5-flash", Rate: tokenRate{InputPerMillion: 0.075, OutputPerMillion: 0.30}},
 	},
+	"google-vertex": {
+		{Prefix: "gemini-2.5-pro", Rate: tokenRate{InputPerMillion: 1.25, OutputPerMillion: 10.0}},
+		{Prefix: "gemini-2.5-flash", Rate: tokenRate{InputPerMillion: 0.15, OutputPerMillion: 0.60}},
+		{Prefix: "gemini-2.0-flash-lite", Rate: tokenRate{InputPerMillion: 0.075, OutputPerMillion: 0.30}},
+		{Prefix: "gemini-2.0-flash", Rate: tokenRate{InputPerMillion: 0.10, OutputPerMillion: 0.40}},
+		{Prefix: "gemini-1.5-pro", Rate: tokenRate{InputPerMillion: 1.25, OutputPerMillion: 5.0}},
+		{Prefix: "gemini-1.5-flash", Rate: tokenRate{InputPerMillion: 0.075, OutputPerMillion: 0.30}},
+	},
 	"azure": {
 		// Azure uses the same OpenAI models at parity pricing.
 		{Prefix: "gpt-4o-mini", Rate: tokenRate{InputPerMillion: 0.15, OutputPerMillion: 0.60}},

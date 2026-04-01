@@ -50,6 +50,11 @@ type ProcessMessageConfig struct {
 	APIKey       string
 	Model        string
 
+	// Google Vertex AI credentials (optional).
+	ProjectID    string
+	Location     string
+	Credentials string
+
 	// Access control.
 	ClearanceLevel   int
 	DelegationScopes []string
@@ -154,12 +159,15 @@ func (b *Bridge) ProcessMessage(ctx context.Context, cfg ProcessMessageConfig) (
 	})
 
 	req := &provider.CompletionRequest{
-		Kind:      cfg.ProviderKind,
-		BaseURL:   cfg.BaseURL,
-		APIKey:    cfg.APIKey,
-		Model:     cfg.Model,
-		Messages:  messages,
-		AgentName: cfg.AgentName,
+		Kind:        cfg.ProviderKind,
+		BaseURL:     cfg.BaseURL,
+		APIKey:      cfg.APIKey,
+		Model:       cfg.Model,
+		Messages:    messages,
+		AgentName:   cfg.AgentName,
+		ProjectID:   cfg.ProjectID,
+		Location:    cfg.Location,
+		Credentials: cfg.Credentials,
 	}
 
 	return exec.Execute(ctx, provider.ChatCompletion, req, cfg.ClearanceLevel, cfg.DelegationScopes, cfg.AllowedActions...)
@@ -219,12 +227,15 @@ func (b *Bridge) ProcessMessageWithCompleteFn(
 	})
 
 	req := &provider.CompletionRequest{
-		Kind:      cfg.ProviderKind,
-		BaseURL:   cfg.BaseURL,
-		APIKey:    cfg.APIKey,
-		Model:     cfg.Model,
-		Messages:  messages,
-		AgentName: cfg.AgentName,
+		Kind:        cfg.ProviderKind,
+		BaseURL:     cfg.BaseURL,
+		APIKey:      cfg.APIKey,
+		Model:       cfg.Model,
+		Messages:    messages,
+		AgentName:   cfg.AgentName,
+		ProjectID:   cfg.ProjectID,
+		Location:    cfg.Location,
+		Credentials: cfg.Credentials,
 	}
 
 	return exec.Execute(ctx, completeFn, req, cfg.ClearanceLevel, cfg.DelegationScopes, cfg.AllowedActions...)

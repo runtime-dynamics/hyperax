@@ -921,7 +921,18 @@ func (h *ConfigHandler) refreshProviderModels(ctx context.Context, params json.R
 		return types.NewErrorResult(fmt.Sprintf("resolve API key: %v", err)), nil
 	}
 
-	discovered, err := provider.DiscoverModels(ctx, p.Kind, p.BaseURL, apiKey)
+	// Parse metadata for google-vertex provider.
+	var metadata map[string]string
+	if p.Metadata != "" {
+		if err := json.Unmarshal([]byte(p.Metadata), &metadata); err != nil {
+			return types.NewErrorResult(fmt.Sprintf("parse provider metadata: %v", err)), nil
+		}
+	}
+	projectID := metadata["project_id"]
+	location := metadata["location"]
+	credentials := metadata["credentials"]
+
+	discovered, err := provider.DiscoverModels(ctx, p.Kind, p.BaseURL, apiKey, projectID, location, credentials)
 	if err != nil {
 		return types.NewErrorResult(fmt.Sprintf("model discovery failed for %q (%s): %v", p.Name, p.Kind, err)), nil
 	}

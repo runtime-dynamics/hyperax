@@ -215,8 +215,23 @@ func (a *ProviderAPI) testConnection(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse metadata for google-vertex provider.
+	var metadata map[string]string
+	if p.Metadata != "" {
+		if err := json.Unmarshal([]byte(p.Metadata), &metadata); err != nil {
+			respondJSON(w, r, http.StatusOK, map[string]any{
+				"success": false,
+				"error":   fmt.Sprintf("parse provider metadata: %v", err),
+			})
+			return
+		}
+	}
+	projectID := metadata["project_id"]
+	location := metadata["location"]
+	credentials := metadata["credentials"]
+
 	// Attempt model discovery as the connection test.
-	models, err := provider.DiscoverModels(r.Context(), p.Kind, p.BaseURL, apiKey)
+	models, err := provider.DiscoverModels(r.Context(), p.Kind, p.BaseURL, apiKey, projectID, location, credentials)
 	if err != nil {
 		respondJSON(w, r,http.StatusOK, map[string]any{
 			"success": false,
@@ -257,6 +272,8 @@ func managedBaseURL(kind string) string {
 		return "https://api.anthropic.com"
 	case "google":
 		return "https://generativelanguage.googleapis.com"
+	case "google-vertex":
+		return "https://us-central1-aiplatform.googleapis.com"
 	default:
 		return ""
 	}

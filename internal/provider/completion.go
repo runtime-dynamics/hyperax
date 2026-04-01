@@ -25,6 +25,7 @@ import (
 	openai "github.com/openai/openai-go"
 	openaiopt "github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/shared"
+	gcpcredentials "cloud.google.com/go/auth/credentials"
 	"google.golang.org/genai"
 )
 
@@ -72,6 +73,10 @@ type CompletionRequest struct {
 	Messages  []ChatMessage   // Conversation messages in chronological order
 	Tools     json.RawMessage // Provider-formatted tool definitions (nil = no tool use)
 	AgentName string          // Agent name for diagnostics (not sent to provider)
+	// For google-vertex: GCP project ID, location, and credentials file path
+	ProjectID    string // GCP project ID for Vertex AI
+	Location     string // Vertex AI location (e.g., "us-central1")
+	Credentials  string // Path to GCP credentials JSON file
 }
 
 // CompletionResponse holds the result of a chat completion call.
@@ -100,7 +105,7 @@ type UsageInfo struct {
 // and returns the assistant's response. It dispatches to provider-specific
 // implementations based on the Kind field in the request.
 //
-// Supported kinds: ollama, openai, anthropic, azure, google, bedrock, custom.
+// Supported kinds: ollama, openai, anthropic, azure, google, google-vertex, bedrock, custom.
 // Custom providers use the OpenAI-compatible format.
 //
 // Returns an error if the provider kind is unsupported, the HTTP request fails,
@@ -131,6 +136,8 @@ func ChatCompletion(ctx context.Context, req *CompletionRequest) (*CompletionRes
 		return completeAzure(ctx, req)
 	case "google":
 		return completeGoogle(ctx, req)
+	case "google-vertex":
+		return completeGoogleVertex(ctx, req)
 	case "bedrock":
 		return completeBedrock(ctx, req)
 	case "custom":
@@ -1381,6 +1388,206 @@ func parseToolsToSDK(toolsJSON json.RawMessage) ([]*genai.Tool, error) {
 	}
 
 	return []*genai.Tool{{FunctionDeclarations: decls}}, nil
+}
+
+// -- Google Vertex AI completion (via go-genai SDK) ----------------------------
+
+func completeGoogleVertex(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error) {
+	googleTrace("=== completeGoogleVertex called, model=%s, messages=%d, hasTools=%v, agent=%s, projectID=%s, location=%s",
+		req.Model, len(req.Messages), len(req.Tools) > 0, req.AgentName, req.ProjectID, req.Location)
+
+	// Log each message role + content type.
+	for i, msg := range req.Messages {
+		contentLen := len(msg.Content)
+		hasRawContent := msg.RawContent != nil
+		hasRawMessage := msg.RawMessage != nil
+		googleTrace("  msg[%d] role=%s contentLen=%d hasRawContent=%v hasRawMessage=%v",
+			i, msg.Role, contentLen, hasRawContent, hasRawMessage)
+	}
+
+	// Build the SDK client for Vertex AI.
+	clientCfg := &genai.ClientConfig{
+		Backend: genai.BackendVertexAI,
+		HTTPOptions: genai.HTTPOptions{
+			Timeout: genai.Ptr(completionTimeout),
+		},
+	}
+
+	// Set project and location for Vertex AI.
+	if req.ProjectID != "" {
+		clientCfg.Project = req.ProjectID
+	}
+	if req.Location != "" {
+		clientCfg.Location = req.Location
+	} else {
+		clientCfg.Location = "us-central1"
+	}
+
+	// Load credentials if provided.
+	if req.Credentials != "" {
+		creds, err := gcpcredentials.DetectDefault(&gcpcredentials.DetectOptions{
+			Scopes:          []string{"https://www.googleapis.com/auth/cloud-platform"},
+			CredentialsFile: req.Credentials,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("provider.completeGoogleVertex: load credentials: %w", err)
+		}
+		clientCfg.Credentials = creds
+	}
+
+	// Support custom base URL for proxies or self-hosted endpoints.
+	if req.BaseURL != "" {
+		clientCfg.HTTPOptions.BaseURL = strings.TrimRight(req.BaseURL, "/")
+	}
+
+	client, err := genai.NewClient(ctx, clientCfg)
+	if err != nil {
+		return nil, fmt.Errorf("provider.completeGoogleVertex: create SDK client: %w", err)
+	}
+
+	// Build GenerateContentConfig with system instruction, tools, and thinking config.
+	config := &genai.GenerateContentConfig{}
+
+	// Extract system messages — Gemini uses a SystemInstruction field.
+	var systemTextParts []*genai.Part
+	var contents []*genai.Content
+	for _, msg := range req.Messages {
+		switch msg.Role {
+		case "system":
+			if msg.Content != "" {
+				systemTextParts = append(systemTextParts, genai.NewPartFromText(msg.Content))
+			}
+		default:
+			role := msg.Role
+			if role == "assistant" {
+				role = "model"
+			}
+			if role == "function" {
+				role = "user"
+			}
+
+			if msg.RawContent != nil {
+				var parts []*genai.Part
+				if err := json.Unmarshal(msg.RawContent, &parts); err != nil {
+					return nil, fmt.Errorf("provider.completeGoogleVertex: unmarshal raw content parts: %w", err)
+				}
+				contents = append(contents, &genai.Content{
+					Role:  role,
+					Parts: parts,
+				})
+			} else if msg.Content != "" {
+				contents = append(contents, genai.NewContentFromText(msg.Content, genai.Role(role)))
+			}
+		}
+	}
+
+	googleTrace("  built %d content blocks, %d system parts", len(contents), len(systemTextParts))
+
+	// Merge consecutive same-role contents.
+	if len(contents) > 1 {
+		merged := make([]*genai.Content, 0, len(contents))
+		merged = append(merged, contents[0])
+		for i := 1; i < len(contents); i++ {
+			last := merged[len(merged)-1]
+			if last.Role == contents[i].Role {
+				last.Parts = append(last.Parts, contents[i].Parts...)
+			} else {
+				merged = append(merged, contents[i])
+			}
+		}
+		contents = merged
+	}
+
+	if len(systemTextParts) > 0 {
+		config.SystemInstruction = &genai.Content{
+			Parts: systemTextParts,
+		}
+	}
+
+	// Convert tools from the adapter's JSON format to SDK types.
+	if len(req.Tools) > 0 {
+		sdkTools, toolErr := parseToolsToSDK(req.Tools)
+		if toolErr != nil {
+			return nil, fmt.Errorf("provider.completeGoogleVertex: parse tools: %w", toolErr)
+		}
+		config.Tools = sdkTools
+	}
+
+	googleTrace("  after merge: %d content blocks", len(contents))
+	googleTrace("  calling SDK GenerateContent model=%s", req.Model)
+
+	// Call the SDK.
+	resp, err := client.Models.GenerateContent(ctx, req.Model, contents, config)
+	if err != nil {
+		googleTrace("  SDK ERROR: %v", err)
+		return nil, fmt.Errorf("provider.completeGoogleVertex: %w", err)
+	}
+	googleTrace("  SDK response received, candidates=%d", len(resp.Candidates))
+
+	if len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil ||
+		len(resp.Candidates[0].Content.Parts) == 0 {
+		if len(resp.Candidates) > 0 {
+			c := resp.Candidates[0]
+			googleTrace("  EMPTY RESPONSE: finishReason=%s, finishMessage=%q, hasContent=%v",
+				c.FinishReason, c.FinishMessage, c.Content != nil)
+
+			if c.FinishReason == "MALFORMED_FUNCTION_CALL" {
+				googleTrace("  recovering from MALFORMED_FUNCTION_CALL with synthetic response")
+				rawResp, marshalErr := json.Marshal(resp)
+				if marshalErr != nil {
+					return nil, fmt.Errorf("provider.completeGoogleVertex: marshal MALFORMED_FUNCTION_CALL response: %w", marshalErr)
+				}
+				return &CompletionResponse{
+					Content:     "I attempted to use a tool but the request was malformed. Let me try a different approach.",
+					Model:       resp.ModelVersion,
+					StopReason:  "stop",
+					RawResponse: rawResp,
+				}, nil
+			}
+
+			return nil, fmt.Errorf("provider.completeGoogleVertex: no content in response (finishReason=%s, finishMessage=%q)", c.FinishReason, c.FinishMessage)
+		}
+		googleTrace("  EMPTY RESPONSE: no candidates at all")
+		return nil, fmt.Errorf("provider.completeGoogleVertex: no candidates in response")
+	}
+
+	// Marshal the SDK response to JSON for RawResponse.
+	rawResp, err := json.Marshal(resp)
+	if err != nil {
+		return nil, fmt.Errorf("provider.completeGoogleVertex: marshal response: %w", err)
+	}
+
+	// Extract text and detect function calls from SDK types.
+	var textParts []string
+	hasFunctionCall := len(resp.FunctionCalls()) > 0
+	for _, part := range resp.Candidates[0].Content.Parts {
+		if part.Text != "" && !part.Thought {
+			textParts = append(textParts, part.Text)
+		}
+	}
+
+	stopReason := "stop"
+	if hasFunctionCall {
+		stopReason = "tool_use"
+	}
+
+	result := &CompletionResponse{
+		Content:     strings.Join(textParts, ""),
+		Model:       resp.ModelVersion,
+		StopReason:  stopReason,
+		RawResponse: rawResp,
+	}
+
+	if resp.UsageMetadata != nil {
+		result.Usage = &UsageInfo{
+			PromptTokens:     int(resp.UsageMetadata.PromptTokenCount),
+			CompletionTokens: int(resp.UsageMetadata.CandidatesTokenCount),
+			TotalTokens:      int(resp.UsageMetadata.TotalTokenCount),
+			CacheReadTokens:  int(resp.UsageMetadata.CachedContentTokenCount),
+		}
+	}
+
+	return result, nil
 }
 
 // -- AWS Bedrock completion (via aws-sdk-go-v2) ------------------------------

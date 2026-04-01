@@ -168,7 +168,7 @@ func TestBridge_ProcessMessage_BadProviderKind(t *testing.T) {
 }
 
 func TestBridge_ProcessMessage_AllProviderKinds(t *testing.T) {
-	kinds := []string{"anthropic", "openai", "ollama", "azure", "custom", "google", "bedrock"}
+	kinds := []string{"anthropic", "openai", "ollama", "azure", "custom", "google", "google-vertex", "bedrock"}
 	resolver := NewResolver(nil)
 
 	for _, kind := range kinds {

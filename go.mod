@@ -3,6 +3,7 @@ module github.com/hyperax/hyperax
 go 1.25.0
 
 require (
+	cloud.google.com/go/auth v0.9.3
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/aws/aws-sdk-go-v2 v1.41.4
@@ -41,7 +42,6 @@ require (
 require (
 	cel.dev/expr v0.25.1 // indirect
 	cloud.google.com/go v0.116.0 // indirect
-	cloud.google.com/go/auth v0.9.3 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
